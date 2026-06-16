@@ -1,0 +1,33 @@
+{
+  "name": "qwen_student_sft_grid",
+  "checkpoint_root": "code/checkpoints/student_sft_grid",
+  "grid": {
+    "data.train_path": [
+      "code/results/real_length_budget/sft_small.jsonl",
+      "code/results/real_length_budget/sft_medium.jsonl",
+      "code/results/real_length_budget/sft_large.jsonl"
+    ],
+    "training.learning_rate": [
+      0.00001,
+      0.00002,
+      0.00005
+    ],
+    "student.lora.r": [
+      8,
+      16
+    ],
+    "student.lora.alpha": [
+      16,
+      32
+    ],
+    "student.lora.dropout": [
+      0.05
+    ],
+    "training.num_train_epochs": [
+      1
+    ],
+    "training.gradient_accumulation_steps": [
+      8
+    ]
+  }
+}

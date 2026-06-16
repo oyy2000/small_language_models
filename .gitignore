@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.log
+
+code/checkpoints/
+code/results/*
+!code/results/real_length_budget/
+code/results/real_length_budget/*
+!code/results/real_length_budget/sft_small.jsonl
+!code/results/real_length_budget/sft_medium.jsonl
+!code/results/real_length_budget/sft_large.jsonl
+!code/results/real_length_budget/summary.json
+!code/results/real_length_budget/summary.csv

@@ -1,0 +1,12 @@
+# Standard-library-only local checks do not require this file.
+# Install these packages before real teacher, dataset, or student runs.
+datasets
+transformers
+accelerate
+trl
+peft
+torch
+matplotlib
+
+# Optional for high-throughput teacher generation on GPU clusters.
+# vllm

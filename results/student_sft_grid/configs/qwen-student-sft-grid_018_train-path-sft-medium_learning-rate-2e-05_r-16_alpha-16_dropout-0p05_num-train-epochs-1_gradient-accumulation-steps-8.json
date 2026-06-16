@@ -1,0 +1,37 @@
+{
+  "experiment_name": "qwen-student-sft-grid_018_train-path-sft-medium_learning-rate-2e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+  "data": {
+    "train_path": "code/results/real_length_budget/sft_medium.jsonl",
+    "eval_path": null,
+    "text_format": "prompt_completion"
+  },
+  "student": {
+    "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "trust_remote_code": false,
+    "torch_dtype": "bfloat16",
+    "use_lora": true,
+    "lora": {
+      "r": 16,
+      "alpha": 16,
+      "dropout": 0.05,
+      "target_modules": "all-linear"
+    }
+  },
+  "training": {
+    "output_dir": "code/checkpoints/student_sft_grid/qwen-student-sft-grid_018_train-path-sft-medium_learning-rate-2e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+    "num_train_epochs": 1,
+    "per_device_train_batch_size": 1,
+    "gradient_accumulation_steps": 8,
+    "learning_rate": 2e-05,
+    "warmup_ratio": 0.03,
+    "logging_steps": 10,
+    "save_steps": 200,
+    "bf16": true,
+    "gradient_checkpointing": true,
+    "max_length": 2048,
+    "completion_only_loss": true,
+    "assistant_only_loss": false,
+    "packing": false
+  }
+}
