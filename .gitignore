@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 *.log
+src/.DS_Store
 
 code/checkpoints/
 code/results/*

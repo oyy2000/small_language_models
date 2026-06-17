@@ -42,7 +42,7 @@ def run_trl_sft(config: Dict[str, Any]) -> None:
     _ensure_pad_token(tokenizer)
     _validate_loss_format(data_config, config.get("training", {}), tokenizer)
 
-    dataset = load_dataset("json", data_files=data_files)
+    dataset = load_dataset("json", data_files=data_files, keep_in_memory=True)
     text_format = data_config.get("text_format", "prompt_completion")
     dataset = _select_sft_columns(dataset, text_format)
 
@@ -83,7 +83,22 @@ def _resolve_project_path(path_value: str) -> Path:
     path = Path(path_value)
     if path.is_absolute():
         return path
+    legacy_path = _resolve_legacy_code_path(path)
+    if legacy_path is not None:
+        project_path = PROJECT_ROOT / path
+        if project_path.exists():
+            return project_path
+        return legacy_path
     return PROJECT_ROOT / path
+
+
+def _resolve_legacy_code_path(path: Path) -> Path | None:
+    parts = path.parts
+    if not parts or parts[0] != "code" or (PROJECT_ROOT / "code").exists():
+        return None
+    if len(parts) == 1:
+        return PROJECT_ROOT
+    return PROJECT_ROOT / Path(*parts[1:])
 
 
 def _require_existing_project_file(label: str, path_value: str) -> str:
@@ -112,7 +127,12 @@ def _select_sft_columns(dataset: Any, text_format: str) -> Any:
 
     for split_name in dataset:
         remove_columns = [column for column in dataset[split_name].column_names if column not in keep_columns]
-        dataset[split_name] = dataset[split_name].map(select_columns, remove_columns=remove_columns)
+        dataset[split_name] = dataset[split_name].map(
+            select_columns,
+            remove_columns=remove_columns,
+            keep_in_memory=True,
+            load_from_cache_file=False,
+        )
     return dataset
 
 
@@ -169,6 +189,13 @@ def _make_sft_config(sft_config_cls: Any, training_config: Dict[str, Any], stude
         "assistant_only_loss": bool(training_config.get("assistant_only_loss", False)),
         "packing": bool(training_config.get("packing", False)),
         "model_init_kwargs": _model_init_kwargs(training_config, student_config),
+        "dataset_kwargs": training_config.get(
+            "dataset_kwargs",
+            {
+                "keep_in_memory": True,
+                "load_from_cache_file": False,
+            },
+        ),
     }
     max_length = training_config.get("max_length", training_config.get("max_seq_length", 2048))
     if "max_length" in parameters:

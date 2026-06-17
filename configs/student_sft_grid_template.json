@@ -1,11 +1,11 @@
 {
   "name": "qwen_student_sft_grid",
-  "checkpoint_root": "code/checkpoints/student_sft_grid",
+  "checkpoint_root": "checkpoints/student_sft_grid",
   "grid": {
     "data.train_path": [
-      "code/results/real_length_budget/sft_small.jsonl",
-      "code/results/real_length_budget/sft_medium.jsonl",
-      "code/results/real_length_budget/sft_large.jsonl"
+      "results/real_length_budget/sft_small.jsonl",
+      "results/real_length_budget/sft_medium.jsonl",
+      "results/real_length_budget/sft_large.jsonl"
     ],
     "training.learning_rate": [
       0.00001,

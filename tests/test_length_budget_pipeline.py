@@ -23,6 +23,7 @@ from length_budget_distill.prompts import build_length_budget_prompt
 from length_budget_distill.records import TraceRecord
 from length_budget_distill.sft_format import trace_to_sft_record
 from length_budget_distill.tokenization import WhitespaceTokenCounter
+import length_budget_distill.training as training_helpers
 from length_budget_distill.verifiers import extract_final_answer, verify_answer
 
 
@@ -170,6 +171,28 @@ class LengthBudgetPipelineTest(unittest.TestCase):
         self.assertFalse(student_config["training"]["assistant_only_loss"])
         self.assertNotIn("approval", real_config)
         self.assertNotIn("approval", student_config)
+
+    def test_legacy_code_prefixed_training_path_resolves_to_project_root(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            tmp_root = Path(tmpdir)
+            data_dir = tmp_root / "results" / "real_length_budget"
+            data_dir.mkdir(parents=True)
+            train_file = data_dir / "sft_small.jsonl"
+            train_file.write_text('{"prompt": "q", "completion": "a"}\n', encoding="utf-8")
+
+            original_root = training_helpers.PROJECT_ROOT
+            training_helpers.PROJECT_ROOT = tmp_root
+            try:
+                resolved = training_helpers._require_existing_project_file(
+                    "data.train_path",
+                    "code/results/real_length_budget/sft_small.jsonl",
+                )
+                output_dir = training_helpers._resolve_project_path("code/checkpoints/student_sft")
+            finally:
+                training_helpers.PROJECT_ROOT = original_root
+
+            self.assertEqual(Path(resolved), train_file)
+            self.assertEqual(output_dir, tmp_root / "checkpoints" / "student_sft")
 
     def test_generation_max_tokens_are_capped_by_budget(self) -> None:
         generation_config = {"max_new_tokens": 1024, "cap_max_new_tokens_by_budget": True}

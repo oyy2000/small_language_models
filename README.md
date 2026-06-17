@@ -15,7 +15,7 @@ The implementation is organized around one real-run pipeline:
 ## Project Layout
 
 ```text
-code/
+./
   src/            reusable library code
   scripts/        runnable entry scripts
   configs/        experiment configs
@@ -41,30 +41,36 @@ Before any real run, review the choices in:
 - `configs/real_length_budget_template.json`
 - `configs/student_sft_template.json`
 
-Then run the generation script with sharding. For independent samples, prefer one process per GPU and disjoint shards:
+Then run the generation script with sharding. On a 4-GPU machine with GPU IDs
+`0,1,2,3`, use the launcher:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 python3 code/scripts/1_1_build_length_budget_traces.py \
-  --config code/configs/real_length_budget_template.json \
-  --output-dir code/results/real_length_budget \
-  --num-shards 4 \
-  --shard-index 0
+bash scripts/run_length_budget_4gpu.sh
 ```
 
-Repeat for shard indices `1`, `2`, and `3` on separate GPUs, then merge shards with `1_2_merge_trace_shards.py`.
+The launcher starts one shard per GPU, waits for all four jobs, and then merges
+the shard outputs automatically. Per-shard logs are written under
+`results/real_length_budget/logs/`.
+
+To override the GPU list, pass `GPU_IDS`:
 
 ```bash
-python3 code/scripts/1_2_merge_trace_shards.py \
-  --input-glob "code/results/real_length_budget/shard_*.jsonl" \
-  --output code/results/real_length_budget/traces_merged.jsonl \
-  --sft-output code/results/real_length_budget/sft_merged.jsonl
+GPU_IDS=0,1,2,3 bash scripts/run_length_budget_4gpu.sh
+```
+
+To override config or output directory:
+
+```bash
+bash scripts/run_length_budget_4gpu.sh \
+  configs/real_length_budget_template.json \
+  results/real_length_budget
 ```
 
 Student SFT is exposed through:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 python3 code/scripts/2_1_train_student_sft.py \
-  --config code/configs/student_sft_template.json
+CUDA_VISIBLE_DEVICES=0 python3 scripts/2_1_train_student_sft.py \
+  --config configs/student_sft_template.json
 ```
 
 The training script expects installed packages such as `transformers`, `datasets`, `trl`, `peft`, and `accelerate`.
@@ -74,31 +80,103 @@ The default SFT config uses `data.text_format="prompt_completion"` with
 path, because Qwen chat templates may not include the `{% generation %}` marker
 needed for assistant-token masks.
 
+## Student SFT Grid Search
+
+Grid search uses a base config plus a grid definition:
+
+- Base config: `configs/student_sft_template.json`
+- Grid config: `configs/student_sft_grid_template.json`
+
+Preview all runs without launching training:
+
+```bash
+python3 scripts/2_2_grid_search_student_sft.py \
+  --base-config configs/student_sft_template.json \
+  --grid-config configs/student_sft_grid_template.json \
+  --work-dir results/student_sft_grid \
+  --dry-run
+```
+
+Run the grid on four GPUs:
+
+```bash
+python3 scripts/2_2_grid_search_student_sft.py \
+  --base-config configs/student_sft_template.json \
+  --grid-config configs/student_sft_grid_template.json \
+  --work-dir results/student_sft_grid \
+  --gpu-ids 0,1,2,3
+```
+
+Each run gets:
+
+```text
+results/student_sft_grid/configs/<run>.json
+results/student_sft_grid/logs/<run>.log
+checkpoints/student_sft_grid/<run>/
+```
+
+The default grid sweeps length-specific SFT files, learning rate, and LoRA
+rank/alpha. Edit `student_sft_grid_template.json` to add or remove parameters.
+
+## Grid Evaluation
+
+After grid training finishes, evaluate every checkpoint on 50 examples:
+
+```bash
+python3 scripts/4_2_eval_grid.py \
+  --manifest results/student_sft_grid/manifest.json \
+  --config configs/real_length_budget_template.json \
+  --model-name Qwen/Qwen2.5-1.5B-Instruct \
+  --split test \
+  --limit 50 \
+  --output-dir results/student_sft_grid/eval \
+  --gpu-ids 0,1,2,3
+```
+
+Preview eval commands without launching:
+
+```bash
+python3 scripts/4_2_eval_grid.py \
+  --manifest results/student_sft_grid/manifest.json \
+  --config configs/real_length_budget_template.json \
+  --model-name Qwen/Qwen2.5-1.5B-Instruct \
+  --limit 50 \
+  --output-dir results/student_sft_grid/eval \
+  --dry-run
+```
+
+The aggregate reports are:
+
+```text
+results/student_sft_grid/eval/grid_eval_summary.json
+results/student_sft_grid/eval/grid_eval_summary.csv
+```
+
 ## SFT Before/After Evaluation
 
 Evaluate the base student before SFT:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 python3 code/scripts/4_1_eval_model.py \
-  --config code/configs/real_length_budget_template.json \
+CUDA_VISIBLE_DEVICES=0 python3 scripts/4_1_eval_model.py \
+  --config configs/real_length_budget_template.json \
   --model-name Qwen/Qwen2.5-1.5B-Instruct \
   --split test \
   --limit 200 \
-  --output-jsonl code/results/eval/qwen_base_gsm8k_test.jsonl \
-  --summary-json code/results/eval/qwen_base_gsm8k_test_summary.json
+  --output-jsonl results/eval/qwen_base_gsm8k_test.jsonl \
+  --summary-json results/eval/qwen_base_gsm8k_test_summary.json
 ```
 
 After SFT, evaluate the same base model with the saved LoRA adapter:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 python3 code/scripts/4_1_eval_model.py \
-  --config code/configs/real_length_budget_template.json \
+CUDA_VISIBLE_DEVICES=0 python3 scripts/4_1_eval_model.py \
+  --config configs/real_length_budget_template.json \
   --model-name Qwen/Qwen2.5-1.5B-Instruct \
-  --adapter-path code/checkpoints/student_sft_pilot \
+  --adapter-path checkpoints/student_sft_pilot \
   --split test \
   --limit 200 \
-  --output-jsonl code/results/eval/qwen_sft_gsm8k_test.jsonl \
-  --summary-json code/results/eval/qwen_sft_gsm8k_test_summary.json
+  --output-jsonl results/eval/qwen_sft_gsm8k_test.jsonl \
+  --summary-json results/eval/qwen_sft_gsm8k_test_summary.json
 ```
 
 The before/after comparison is the accuracy difference between the two summary
@@ -146,8 +224,8 @@ To materialize separate SFT files by length, filter on `metadata.budget_name`:
 
 ```bash
 python3 -c 'import json, pathlib
-src = pathlib.Path("code/results/real_length_budget/sft_merged.jsonl")
-out_dir = pathlib.Path("code/results/real_length_budget")
+src = pathlib.Path("results/real_length_budget/sft_merged.jsonl")
+out_dir = pathlib.Path("results/real_length_budget")
 for name in ("small", "medium", "large"):
     with src.open() as fin, (out_dir / f"sft_{name}.jsonl").open("w") as fout:
         for line in fin:
@@ -160,7 +238,7 @@ for name in ("small", "medium", "large"):
 Then point `data.train_path` in `configs/student_sft_template.json` to one of:
 
 ```text
-code/results/real_length_budget/sft_small.jsonl
-code/results/real_length_budget/sft_medium.jsonl
-code/results/real_length_budget/sft_large.jsonl
+results/real_length_budget/sft_small.jsonl
+results/real_length_budget/sft_medium.jsonl
+results/real_length_budget/sft_large.jsonl
 ```

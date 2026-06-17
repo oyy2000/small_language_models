@@ -1,7 +1,7 @@
 {
   "experiment_name": "student_sft_pilot",
   "data": {
-    "train_path": "code/results/real_length_budget/sft_merged.jsonl",
+    "train_path": "results/real_length_budget/sft_merged.jsonl",
     "eval_path": null,
     "text_format": "prompt_completion"
   },
@@ -19,7 +19,7 @@
     }
   },
   "training": {
-    "output_dir": "code/checkpoints/student_sft_pilot",
+    "output_dir": "checkpoints/student_sft_pilot",
     "num_train_epochs": 1,
     "per_device_train_batch_size": 1,
     "gradient_accumulation_steps": 8,

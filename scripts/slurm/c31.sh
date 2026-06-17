@@ -13,7 +13,7 @@
 set -euo pipefail
 
 source /mnt/beegfs/youyang7/miniconda3/etc/profile.d/conda.sh
-conda activate fact
+conda activate sft
 
 cd /home/youyang7/projects/LostInTheSecond
 
