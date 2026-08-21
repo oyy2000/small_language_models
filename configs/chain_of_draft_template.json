@@ -1,0 +1,51 @@
+{
+  "experiment_name": "chain_of_draft_pilot",
+  "prompt": {
+    "strategy": "chain_of_draft",
+    "fewshot_path": "reference/chain-of-draft/configs/gsm8k_cod.yaml"
+  },
+  "dataset": {
+    "source": "hf_dataset",
+    "dataset_name": "openai/gsm8k",
+    "dataset_config": "main",
+    "split": "train",
+    "question_field": "question",
+    "answer_field": "answer",
+    "answer_format": "gsm8k",
+    "max_examples": 2000
+  },
+  "teacher": {
+    "backend": "vllm",
+    "model_name": "Qwen/Qwen2.5-7B-Instruct",
+    "tokenizer_name": "Qwen/Qwen2.5-7B-Instruct",
+    "use_chat_template": true,
+    "trust_remote_code": false,
+    "dtype": "bfloat16",
+    "tensor_parallel_size": 1,
+    "generation": {
+      "temperature": 0.2,
+      "top_p": 0.95,
+      "max_new_tokens": 1024,
+      "cap_max_new_tokens_by_budget": false,
+      "stop": [
+        "<|im_end|>"
+      ]
+    }
+  },
+  "length_budgets": [
+    {
+      "name": "cod",
+      "max_solution_tokens": 128,
+      "style_hint": "Use Chain of Draft notes and include the final Answer line."
+    }
+  ],
+  "token_counter": {
+    "backend": "hf_tokenizer",
+    "tokenizer_name": "Qwen/Qwen2.5-7B-Instruct",
+    "trust_remote_code": false
+  },
+  "output": {
+    "keep_only_correct_for_sft": true,
+    "include_prompt_in_trace": true
+  }
+}

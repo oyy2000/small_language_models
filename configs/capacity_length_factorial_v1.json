@@ -1,0 +1,165 @@
+{
+  "experiment_name": "capacity_length_factorial_v1",
+  "dataset": {
+    "source": "hf_dataset",
+    "dataset_name": "openai/gsm8k",
+    "dataset_config": "main",
+    "split": "train",
+    "question_field": "question",
+    "answer_field": "answer",
+    "answer_format": "gsm8k",
+    "max_examples": 2000
+  },
+  "generators": [
+    {
+      "name": "qwen2p5_1p5b",
+      "size_b": 1.5,
+      "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+      "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+      "preferred_node": "c49",
+      "backend": "vllm",
+      "dtype": "bfloat16",
+      "tensor_parallel_size": 1,
+      "trust_remote_code": false,
+      "llm_kwargs": {
+        "gpu_memory_utilization": 0.85,
+        "max_model_len": 2048,
+        "max_num_seqs": 128
+      }
+    },
+    {
+      "name": "qwen2p5_3b",
+      "size_b": 3.0,
+      "model_name": "Qwen/Qwen2.5-3B-Instruct",
+      "tokenizer_name": "Qwen/Qwen2.5-3B-Instruct",
+      "preferred_node": "c32",
+      "backend": "vllm",
+      "dtype": "bfloat16",
+      "tensor_parallel_size": 1,
+      "trust_remote_code": false,
+      "llm_kwargs": {
+        "gpu_memory_utilization": 0.85,
+        "max_model_len": 2048,
+        "max_num_seqs": 96
+      }
+    },
+    {
+      "name": "qwen2p5_7b",
+      "size_b": 7.0,
+      "model_name": "Qwen/Qwen2.5-7B-Instruct",
+      "tokenizer_name": "Qwen/Qwen2.5-7B-Instruct",
+      "preferred_node": "c31",
+      "backend": "vllm",
+      "dtype": "bfloat16",
+      "tensor_parallel_size": 1,
+      "trust_remote_code": false,
+      "llm_kwargs": {
+        "gpu_memory_utilization": 0.85,
+        "max_model_len": 2048,
+        "max_num_seqs": 48
+      }
+    },
+    {
+      "name": "qwen2p5_14b",
+      "size_b": 14.0,
+      "model_name": "Qwen/Qwen2.5-14B-Instruct",
+      "model_path": "/mnt/beegfs/youyang7/.cache/huggingface/hub/models--Qwen--Qwen2.5-14B-Instruct/snapshots/cf98f3b3bbb457ad9e2bb7baf9a0125b6b88caa8",
+      "tokenizer_name": "Qwen/Qwen2.5-14B-Instruct",
+      "preferred_node": "c30",
+      "backend": "vllm",
+      "dtype": "bfloat16",
+      "tensor_parallel_size": 1,
+      "trust_remote_code": false,
+      "llm_kwargs": {
+        "gpu_memory_utilization": 0.85,
+        "max_model_len": 2048,
+        "max_num_seqs": 24
+      }
+    }
+  ],
+  "generation": {
+    "num_candidates": 3,
+    "base_seed": 20260820,
+    "batch_size": 32,
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "max_new_tokens": 1024,
+    "cap_max_new_tokens_by_budget": false,
+    "stop": [
+      "<|im_end|>"
+    ]
+  },
+  "length_budgets": [
+    {
+      "name": "short_128",
+      "max_solution_tokens": 128,
+      "style_hint": "Use compressed equations and only essential words, but always include the final Answer line."
+    },
+    {
+      "name": "medium_256",
+      "max_solution_tokens": 256,
+      "style_hint": "Use concise step-by-step reasoning and include the final Answer line."
+    },
+    {
+      "name": "long_512",
+      "max_solution_tokens": 512,
+      "style_hint": "Use detailed step-by-step reasoning and include the final Answer line."
+    }
+  ],
+  "token_counter": {
+    "backend": "hf_tokenizer",
+    "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "trust_remote_code": false,
+    "tokenizer_kwargs": {
+      "cache_dir": "/mnt/beegfs/youyang7/.cache/huggingface/hub"
+    }
+  },
+  "output": {
+    "include_prompt_in_trace": true
+  },
+  "balancing": {
+    "smoke_min_common_problems": 50,
+    "formal_min_common_problems": 500,
+    "training_seeds": [17, 42, 73],
+    "max_equal_token_gap": 512
+  },
+  "student": {
+    "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "trust_remote_code": false,
+    "torch_dtype": "bfloat16",
+    "use_lora": true,
+    "lora": {
+      "r": 4,
+      "alpha": 16,
+      "dropout": 0.05,
+      "target_modules": "all-linear"
+    }
+  },
+  "training": {
+    "num_train_epochs": 1,
+    "per_device_train_batch_size": 1,
+    "gradient_accumulation_steps": 8,
+    "learning_rate": 0.00002,
+    "warmup_ratio": 0.03,
+    "logging_steps": 10,
+    "save_steps": 200,
+    "bf16": true,
+    "gradient_checkpointing": true,
+    "max_length": 2048,
+    "completion_only_loss": true,
+    "assistant_only_loss": false,
+    "packing": false,
+    "report_to": "none"
+  },
+  "evaluation": {
+    "dataset_split": "test",
+    "smoke_start_index": 0,
+    "smoke_limit": 50,
+    "formal_start_index": 50,
+    "formal_limit": 1269,
+    "max_new_tokens": 512,
+    "temperature": 0.0,
+    "top_p": 1.0
+  }
+}

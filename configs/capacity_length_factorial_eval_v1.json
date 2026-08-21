@@ -1,0 +1,7 @@
+{
+  "parent_config_sha256": "901fd9c31edcd77ab357b03f5e1cbb8cd0c92be3db31f9cec98bd70d166edcdc",
+  "evaluation_overrides": {
+    "batch_size": 32
+  },
+  "rationale": "Batch-32 greedy decoding preserves the registered decoding rule, uses underutilized inference memory safely, and makes the 79-run locked evaluation operationally tractable."
+}

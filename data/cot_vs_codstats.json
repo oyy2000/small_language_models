@@ -1,0 +1,38 @@
+{
+  "datasets": [
+    {
+      "dataset": "cod",
+      "path": "results/chain_of_draft/sft_merged.jsonl",
+      "n_examples": 1451,
+      "n_unique_problems": 1451,
+      "correct_count": 1451,
+      "correct_rate": 1.0,
+      "max_solution_tokens_budget": 128,
+      "mean_solution_tokens": 39.71536871123363,
+      "median_solution_tokens": 37.0,
+      "p10_solution_tokens": 23.0,
+      "p90_solution_tokens": 62.0,
+      "min_solution_tokens": 11,
+      "max_solution_tokens": 124,
+      "mean_prompt_chars": 219.90696071674708,
+      "mean_completion_chars": 50.98070296347347
+    },
+    {
+      "dataset": "cot",
+      "path": "results/standard_prompt/sft_merged.jsonl",
+      "n_examples": 1874,
+      "n_unique_problems": 1874,
+      "correct_count": 1874,
+      "correct_rate": 1.0,
+      "max_solution_tokens_budget": 512,
+      "mean_solution_tokens": 126.97545357524012,
+      "median_solution_tokens": 114.0,
+      "p10_solution_tokens": 69.0,
+      "p90_solution_tokens": 203.0,
+      "min_solution_tokens": 41,
+      "max_solution_tokens": 402,
+      "mean_prompt_chars": 232.0528281750267,
+      "mean_completion_chars": 368.2870864461046
+    }
+  ]
+}

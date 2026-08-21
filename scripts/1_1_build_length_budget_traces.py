@@ -7,6 +7,7 @@ import argparse
 import json
 import logging
 import sys
+import time
 from pathlib import Path
 from typing import List
 
@@ -19,7 +20,7 @@ from length_budget_distill.backends import make_teacher_backend
 from length_budget_distill.bucketing import get_length_budgets, iter_shard
 from length_budget_distill.config import load_config
 from length_budget_distill.datasets import load_problem_records
-from length_budget_distill.prompts import build_length_budget_prompt
+from length_budget_distill.prompts import build_teacher_prompt, get_prompt_strategy
 from length_budget_distill.records import TraceRecord, trace_to_dict, write_jsonl
 from length_budget_distill.sft_format import trace_to_sft_record
 from length_budget_distill.tokenization import make_token_counter
@@ -33,6 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-shards", type=int, default=1, help="Total number of independent data shards.")
     parser.add_argument("--shard-index", type=int, default=0, help="Current shard index.")
     parser.add_argument("--limit", type=int, default=None, help="Optional limit after dataset loading.")
+    parser.add_argument("--log-every", type=int, default=10, help="Log shard progress every N generated traces.")
     return parser.parse_args()
 
 
@@ -51,19 +53,31 @@ def main() -> None:
     budgets = get_length_budgets(config)
     teacher = make_teacher_backend(config)
     token_counter = make_token_counter(config)
+    prompt_strategy = get_prompt_strategy(config)
 
     logging.info("experiment=%s", config.get("experiment_name", "unnamed"))
+    logging.info("prompt_strategy=%s", prompt_strategy)
     logging.info("teacher_backend=%s teacher_model=%s", teacher.backend_name, teacher.model_name)
+    shard_problems = list(iter_shard(problems, args.num_shards, args.shard_index))
+    total_traces = len(shard_problems) * len(budgets)
+
     logging.info("num_problems=%d num_budgets=%d", len(problems), len(budgets))
+    logging.info("num_shard_problems=%d total_shard_traces=%d", len(shard_problems), total_traces)
     logging.info("shard_index=%d num_shards=%d", args.shard_index, args.num_shards)
 
     traces: List[TraceRecord] = []
-    for _, problem in iter_shard(problems, args.num_shards, args.shard_index):
+    start_time = time.monotonic()
+    completed = 0
+    correct = 0
+    log_every = max(1, int(args.log_every))
+
+    for _, problem in shard_problems:
         for budget in budgets:
-            prompt = build_length_budget_prompt(problem, budget)
+            prompt = build_teacher_prompt(problem, budget, config)
             solution = teacher.generate(problem, budget, prompt)
             predicted = extract_final_answer(solution)
             is_correct = verify_answer(predicted, problem.answer)
+            correct += int(is_correct)
             token_count = token_counter.count(solution)
             trace_id = f"{problem.problem_id}:{budget['name']}"
             traces.append(
@@ -81,9 +95,30 @@ def main() -> None:
                     predicted_answer=predicted,
                     is_correct=is_correct,
                     solution_token_count=token_count,
-                    metadata={"problem_metadata": problem.metadata},
+                    metadata={
+                        "problem_metadata": problem.metadata,
+                        "prompt_strategy": prompt_strategy,
+                    },
                 )
             )
+            completed += 1
+            if completed == 1 or completed % log_every == 0 or completed == total_traces:
+                elapsed = time.monotonic() - start_time
+                traces_per_sec = completed / elapsed if elapsed > 0 else 0.0
+                remaining = total_traces - completed
+                eta_sec = remaining / traces_per_sec if traces_per_sec > 0 else 0.0
+                percent = (completed / total_traces * 100.0) if total_traces else 100.0
+                logging.info(
+                    "progress shard=%d percent=%.1f%% processed=%d/%d correct=%d elapsed_min=%.1f eta_min=%.1f traces_per_sec=%.3f",
+                    args.shard_index,
+                    percent,
+                    completed,
+                    total_traces,
+                    correct,
+                    elapsed / 60.0,
+                    eta_sec / 60.0,
+                    traces_per_sec,
+                )
 
     shard_suffix = f"shard_{args.shard_index:05d}_of_{args.num_shards:05d}"
     raw_path = output_dir / f"{shard_suffix}.jsonl"

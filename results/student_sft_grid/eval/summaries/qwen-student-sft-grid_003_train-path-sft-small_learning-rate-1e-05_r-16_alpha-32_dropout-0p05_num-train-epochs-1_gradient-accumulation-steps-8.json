@@ -1,9 +1,0 @@
-{
-  "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
-  "adapter_path": "checkpoints/student_sft_grid/qwen-student-sft-grid_003_train-path-sft-small_learning-rate-1e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
-  "split": "test",
-  "n": 50,
-  "correct": 13,
-  "accuracy": 0.26,
-  "output_jsonl": "results/student_sft_grid/eval/predictions/qwen-student-sft-grid_003_train-path-sft-small_learning-rate-1e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.jsonl"
-}

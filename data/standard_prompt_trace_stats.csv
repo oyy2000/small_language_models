@@ -1,0 +1,2 @@
+budget_name,n,correct,correct_rate,avg_solution_tokens,min_solution_tokens,max_solution_tokens,declared_max_solution_tokens
+standard,2000,1854,0.927,314.4225,125,1057,512

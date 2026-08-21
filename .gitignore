@@ -1,14 +1,75 @@
+# Python bytecode and tool caches
 __pycache__/
-*.pyc
-*.log
-src/.DS_Store
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
 
-code/checkpoints/
-code/results/*
-!code/results/real_length_budget/
-code/results/real_length_budget/*
-!code/results/real_length_budget/sft_small.jsonl
-!code/results/real_length_budget/sft_medium.jsonl
-!code/results/real_length_budget/sft_large.jsonl
-!code/results/real_length_budget/summary.json
-!code/results/real_length_budget/summary.csv
+# Editor and operating-system files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local environments and secrets
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+*.pem
+*.key
+
+# Runtime logs and temporary files
+/logs/
+*.log
+*.out
+*.err
+*.tmp
+*.temp
+/tmp/
+/wandb/
+/mlruns/
+/lightning_logs/
+events.out.tfevents.*
+
+# Local caches
+/.cache/
+.cache/
+
+# Model weights and large binary artifacts
+/checkpoints
+/checkpoints/
+/models/
+/wheels/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.arrow
+
+# Experiment outputs. Keep only lightweight, reviewable evidence in Git.
+/results/**
+!/results/**/
+!/results/**/.gitkeep
+!/results/**/README.md
+!/results/**/manifest*.json
+!/results/**/summary*.json
+!/results/**/summary*.csv
+!/results/**/audit*.json
+!/results/**/completion*.json
+!/results/**/COMPLETE
+!/results/**/COMPLETE.*
+
+# Generated outputs accidentally placed below configs.
+/configs/results/
+
+# External reference repositories should be added deliberately as submodules.
+/reference/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/

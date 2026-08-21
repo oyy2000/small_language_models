@@ -1,0 +1,55 @@
+{
+  "datasets": [
+    {
+      "dataset": "small",
+      "path": "results/real_length_budget/sft_small.jsonl",
+      "n_examples": 1096,
+      "n_unique_problems": 1096,
+      "correct_count": 1096,
+      "correct_rate": 1.0,
+      "max_solution_tokens_budget": 128,
+      "mean_solution_tokens": 43.59306569343066,
+      "median_solution_tokens": 40.0,
+      "p10_solution_tokens": 23.0,
+      "p90_solution_tokens": 69.0,
+      "min_solution_tokens": 14,
+      "max_solution_tokens": 121,
+      "mean_prompt_chars": 220.03010948905109,
+      "mean_completion_chars": 75.46350364963503
+    },
+    {
+      "dataset": "medium",
+      "path": "results/real_length_budget/sft_medium.jsonl",
+      "n_examples": 1541,
+      "n_unique_problems": 1541,
+      "correct_count": 1541,
+      "correct_rate": 1.0,
+      "max_solution_tokens_budget": 256,
+      "mean_solution_tokens": 110.44192083062946,
+      "median_solution_tokens": 104.0,
+      "p10_solution_tokens": 64.0,
+      "p90_solution_tokens": 161.0,
+      "min_solution_tokens": 31,
+      "max_solution_tokens": 506,
+      "mean_prompt_chars": 232.01492537313433,
+      "mean_completion_chars": 311.65801427644385
+    },
+    {
+      "dataset": "large",
+      "path": "results/real_length_budget/sft_large.jsonl",
+      "n_examples": 1350,
+      "n_unique_problems": 1350,
+      "correct_count": 1350,
+      "correct_rate": 1.0,
+      "max_solution_tokens_budget": 512,
+      "mean_solution_tokens": 225.76592592592593,
+      "median_solution_tokens": 216.0,
+      "p10_solution_tokens": 150.0,
+      "p90_solution_tokens": 317.1999999999998,
+      "min_solution_tokens": 73,
+      "max_solution_tokens": 664,
+      "mean_prompt_chars": 231.11333333333334,
+      "mean_completion_chars": 736.6022222222222
+    }
+  ]
+}

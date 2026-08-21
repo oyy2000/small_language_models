@@ -19,7 +19,7 @@ from length_budget_distill.backends import LocalRuleTeacherBackend, _max_new_tok
 from length_budget_distill.bucketing import get_length_budgets
 from length_budget_distill.config import load_config
 from length_budget_distill.datasets import load_problem_records
-from length_budget_distill.prompts import build_length_budget_prompt
+from length_budget_distill.prompts import build_length_budget_prompt, build_teacher_prompt, get_prompt_strategy
 from length_budget_distill.records import TraceRecord
 from length_budget_distill.sft_format import trace_to_sft_record
 from length_budget_distill.tokenization import WhitespaceTokenCounter
@@ -127,9 +127,13 @@ class LengthBudgetPipelineTest(unittest.TestCase):
             predicted_answer="8",
             is_correct=True,
             solution_token_count=4,
+            metadata={"prompt_strategy": "standard", "problem_metadata": {"source": "unit"}},
         )
         sft = trace_to_sft_record(trace)
         self.assertEqual(sft["messages"][1]["role"], "assistant")
+        self.assertEqual(sft["teacher_prompt"], "prompt")
+        self.assertEqual(sft["metadata"]["prompt_strategy"], "standard")
+        self.assertEqual(sft["metadata"]["problem_metadata"]["source"], "unit")
         summary = summarize_by_budget([trace])
         self.assertEqual(summary[0]["budget_name"], "small")
         self.assertEqual(summary[0]["correct_rate"], 1.0)
@@ -161,8 +165,9 @@ class LengthBudgetPipelineTest(unittest.TestCase):
         real_config = load_config(str(PROJECT_ROOT / "configs" / "real_length_budget_template.json"))
         student_config = load_config(str(PROJECT_ROOT / "configs" / "student_sft_template.json"))
 
-        self.assertIn("Qwen", real_config["teacher"]["model_name"])
-        self.assertIn("Qwen", real_config["token_counter"]["tokenizer_name"])
+        self.assertEqual(real_config["teacher"]["model_name"], "Qwen/Qwen2.5-7B-Instruct")
+        self.assertEqual(real_config["teacher"]["tokenizer_name"], "Qwen/Qwen2.5-7B-Instruct")
+        self.assertEqual(real_config["token_counter"]["tokenizer_name"], "Qwen/Qwen2.5-7B-Instruct")
         self.assertIn("Qwen", student_config["student"]["model_name"])
         self.assertEqual([budget["name"] for budget in real_config["length_budgets"]], ["small", "medium", "large"])
         self.assertFalse(real_config["teacher"]["generation"]["cap_max_new_tokens_by_budget"])
@@ -194,6 +199,89 @@ class LengthBudgetPipelineTest(unittest.TestCase):
             self.assertEqual(Path(resolved), train_file)
             self.assertEqual(output_dir, tmp_root / "checkpoints" / "student_sft")
 
+    def test_sft_config_omits_model_init_kwargs_when_model_is_preloaded(self) -> None:
+        class DummySFTConfig:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+        student_config = {"trust_remote_code": False, "torch_dtype": "bfloat16"}
+        training_config = {
+            "output_dir": "checkpoints/test_student_sft",
+            "max_steps": 1,
+            "seed": 17,
+            "data_seed": 42,
+        }
+
+        fresh_model_args = training_helpers._make_sft_config(
+            DummySFTConfig,
+            training_config,
+            student_config,
+        )
+        resumed_model_args = training_helpers._make_sft_config(
+            DummySFTConfig,
+            training_config,
+            student_config,
+            include_model_init_kwargs=False,
+        )
+
+        self.assertIn("model_init_kwargs", fresh_model_args.kwargs)
+        self.assertEqual(fresh_model_args.kwargs["model_init_kwargs"]["device_map"], "auto")
+        self.assertEqual(fresh_model_args.kwargs["max_steps"], 1)
+        self.assertEqual(fresh_model_args.kwargs["seed"], 17)
+        self.assertEqual(fresh_model_args.kwargs["data_seed"], 42)
+        self.assertNotIn("model_init_kwargs", resumed_model_args.kwargs)
+        self.assertEqual(resumed_model_args.kwargs["max_steps"], 1)
+
+    def test_resumed_adapter_training_enables_input_grads_for_checkpointing(self) -> None:
+        class DummyParameter:
+            requires_grad = True
+
+            def numel(self) -> int:
+                return 3
+
+        class DummyModel:
+            def __init__(self) -> None:
+                self.train_called = False
+                self.enable_input_grads_called = False
+
+            def train(self) -> None:
+                self.train_called = True
+
+            def parameters(self):
+                return [DummyParameter()]
+
+            def enable_input_require_grads(self) -> None:
+                self.enable_input_grads_called = True
+
+        model = DummyModel()
+        training_helpers._prepare_resumed_adapter_for_training(
+            model,
+            {"gradient_checkpointing": True},
+        )
+
+        self.assertTrue(model.train_called)
+        self.assertTrue(model.enable_input_grads_called)
+
+    def test_resumed_adapter_training_rejects_adapter_without_trainable_parameters(self) -> None:
+        class FrozenParameter:
+            requires_grad = False
+
+            def numel(self) -> int:
+                return 3
+
+        class FrozenModel:
+            def train(self) -> None:
+                pass
+
+            def parameters(self):
+                return [FrozenParameter()]
+
+        with self.assertRaisesRegex(ValueError, "no trainable parameters"):
+            training_helpers._prepare_resumed_adapter_for_training(
+                FrozenModel(),
+                {"gradient_checkpointing": True},
+            )
+
     def test_generation_max_tokens_are_capped_by_budget(self) -> None:
         generation_config = {"max_new_tokens": 1024, "cap_max_new_tokens_by_budget": True}
         budget = {"name": "small", "max_solution_tokens": 128}
@@ -218,6 +306,76 @@ class LengthBudgetPipelineTest(unittest.TestCase):
         self.assertIn("prompt-level length target", prompt)
         self.assertIn("do not omit the final answer", prompt)
         self.assertIn("Answer: <final answer>", prompt)
+
+    def test_prompt_strategy_switches_standard_and_chain_of_draft(self) -> None:
+        record = load_problem_records(self.config)[0]
+        budget = {
+            "name": "cod",
+            "max_solution_tokens": 128,
+            "style_hint": "Use draft notes.",
+        }
+
+        standard_prompt = build_teacher_prompt(record, budget, {"prompt": {"strategy": "standard"}})
+        cod_prompt = build_teacher_prompt(
+            record,
+            budget,
+            {"prompt": {"strategy": "cod"}},
+        )
+
+        self.assertEqual(get_prompt_strategy({"prompt": {"strategy": "baseline"}}), "chain_of_thought")
+        self.assertEqual(get_prompt_strategy({"prompt": {"strategy": "chain-of-thought"}}), "chain_of_thought")
+        self.assertEqual(get_prompt_strategy({"prompt": {"strategy": "chain-of-draft"}}), "chain_of_draft")
+        self.assertNotIn("Length budget", standard_prompt)
+        self.assertNotIn("Length budget", cod_prompt)
+        self.assertIn("Think step by step to answer the following question.", standard_prompt)
+        self.assertIn("There are 15 trees in the grove.", standard_prompt)
+        self.assertIn("There are 15 trees originally.", standard_prompt)
+        self.assertIn("#### 6", standard_prompt)
+        self.assertTrue(standard_prompt.rstrip().endswith(f"Q: {record.question}\nA:"))
+        self.assertIn(
+            "Think step by step, but only keep minimum draft for each thinking step, "
+            "with 5 words at most.",
+            cod_prompt,
+        )
+        self.assertIn("21 - 15 = 6. #### 6", cod_prompt)
+        self.assertTrue(cod_prompt.rstrip().endswith(f"Q: {record.question}\nA:"))
+
+    def test_prompt_fewshot_template_can_be_loaded_from_config_path(self) -> None:
+        record = load_problem_records(self.config)[0]
+        budget = {"name": "standard", "max_solution_tokens": 512}
+        template_path = self.tmp_path / "custom_prompt_template.json"
+        template_path.write_text(
+            json.dumps(
+                {
+                    "system_prompt": "Use the configured examples.",
+                    "format": "Question: {question}\nAnswer: {answer}",
+                    "fewshot": [
+                        {
+                            "question": "What is 1 + 1?",
+                            "answer": "1 + 1 = 2. #### 2",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        prompt = build_teacher_prompt(
+            record,
+            budget,
+            {
+                "_config_path": str(self.config_path),
+                "prompt": {
+                    "strategy": "chain_of_thought",
+                    "fewshot_path": template_path.name,
+                },
+            },
+        )
+
+        self.assertIn("Use the configured examples.", prompt)
+        self.assertIn("Question: What is 1 + 1?", prompt)
+        self.assertIn("Answer: 1 + 1 = 2. #### 2", prompt)
+        self.assertTrue(prompt.rstrip().endswith(f"Question: {record.question}\nAnswer:"))
 
 
 if __name__ == "__main__":

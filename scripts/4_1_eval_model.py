@@ -18,13 +18,8 @@ if str(SRC_ROOT) not in sys.path:
 from length_budget_distill.config import load_config
 from length_budget_distill.datasets import load_problem_records
 from length_budget_distill.records import ProblemRecord, write_jsonl
+from length_budget_distill.student_prompts import build_student_math_prompt
 from length_budget_distill.verifiers import extract_final_answer, verify_answer
-
-
-SYSTEM_PROMPT = (
-    "You are a careful math solver. Solve the problem correctly and end with "
-    "a line in the form: Answer: <final answer>."
-)
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,12 +28,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-name", required=True, help="Base model name or full fine-tuned checkpoint path.")
     parser.add_argument("--adapter-path", default=None, help="Optional LoRA/PEFT adapter path for SFT evaluation.")
     parser.add_argument("--split", default="test", help="Dataset split to evaluate.")
+    parser.add_argument("--start-index", type=int, default=0, help="Zero-based first dataset example to evaluate.")
     parser.add_argument("--limit", type=int, default=None, help="Optional max number of eval examples.")
     parser.add_argument("--output-jsonl", required=True, help="Per-example prediction JSONL path.")
     parser.add_argument("--summary-json", required=True, help="Aggregate metrics JSON path.")
     parser.add_argument("--max-new-tokens", type=int, default=512, help="Generation token limit.")
     parser.add_argument("--temperature", type=float, default=0.0, help="Generation temperature.")
     parser.add_argument("--top-p", type=float, default=1.0, help="Generation nucleus sampling value.")
+    parser.add_argument("--batch-size", type=int, default=1, help="Number of prompts decoded together.")
     parser.add_argument("--device-map", default="auto", help="Transformers device_map value.")
     parser.add_argument(
         "--torch-dtype",
@@ -56,11 +53,24 @@ def main() -> None:
     config = load_config(args.config)
     config["dataset"] = dict(config.get("dataset", {}))
     config["dataset"]["split"] = args.split
+    if args.start_index < 0:
+        raise ValueError("--start-index must be non-negative.")
+    if args.limit is not None and args.limit <= 0:
+        raise ValueError("--limit must be positive when provided.")
+    if args.batch_size <= 0:
+        raise ValueError("--batch-size must be positive.")
     if args.limit is not None:
-        config["dataset"]["max_examples"] = args.limit
+        config["dataset"]["max_examples"] = args.start_index + args.limit
 
     problems = load_problem_records(config)
-    logging.info("loaded_eval_examples=%d split=%s", len(problems), args.split)
+    stop_index = args.start_index + args.limit if args.limit is not None else None
+    problems = problems[args.start_index:stop_index]
+    logging.info(
+        "loaded_eval_examples=%d split=%s start_index=%d",
+        len(problems),
+        args.split,
+        args.start_index,
+    )
 
     model_bundle = _load_model(
         model_name=args.model_name,
@@ -74,6 +84,7 @@ def main() -> None:
         "model_name": args.model_name,
         "adapter_path": args.adapter_path,
         "split": args.split,
+        "start_index": args.start_index,
         "n": len(rows),
         "correct": correct,
         "accuracy": correct / len(rows) if rows else 0.0,
@@ -102,6 +113,7 @@ def _load_model(model_name: str, adapter_path: Optional[str], device_map: str, t
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if getattr(tokenizer, "pad_token_id", None) is None and getattr(tokenizer, "eos_token", None):
         tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "left"
 
     model_kwargs: Dict[str, Any] = {"device_map": device_map}
     dtype = _resolve_dtype(torch, torch_dtype)
@@ -132,51 +144,56 @@ def _resolve_dtype(torch_module: Any, dtype_name: str) -> Any:
 
 def _evaluate(problems: List[ProblemRecord], model_bundle: Dict[str, Any], args: argparse.Namespace) -> List[Dict[str, Any]]:
     rows = []
-    for index, problem in enumerate(problems, start=1):
-        prompt = _build_eval_prompt(problem.question)
-        prediction_text = _generate(model_bundle, prompt, args)
-        predicted_answer = extract_final_answer(prediction_text)
-        is_correct = verify_answer(predicted_answer, problem.answer)
-        rows.append(
-            {
-                "problem_id": problem.problem_id,
-                "question": problem.question,
-                "gold_answer": problem.answer,
-                "prediction_text": prediction_text,
-                "predicted_answer": predicted_answer,
-                "is_correct": is_correct,
-                "metadata": problem.metadata,
-            }
-        )
-        if index % 25 == 0:
-            logging.info("evaluated=%d", index)
+    for start in range(0, len(problems), args.batch_size):
+        batch = problems[start : start + args.batch_size]
+        prompts = [_build_eval_prompt(problem.question) for problem in batch]
+        predictions = _generate_batch(model_bundle, prompts, args)
+        for problem, prediction_text in zip(batch, predictions):
+            output_token_count = len(model_bundle["tokenizer"].encode(prediction_text, add_special_tokens=False))
+            predicted_answer = extract_final_answer(prediction_text)
+            is_correct = verify_answer(predicted_answer, problem.answer)
+            rows.append(
+                {
+                    "problem_id": problem.problem_id,
+                    "question": problem.question,
+                    "gold_answer": problem.answer,
+                    "prediction_text": prediction_text,
+                    "predicted_answer": predicted_answer,
+                    "is_correct": is_correct,
+                    "output_token_count": output_token_count,
+                    "metadata": problem.metadata,
+                }
+            )
+        if len(rows) % 25 < len(batch) or len(rows) == len(problems):
+            logging.info("evaluated=%d", len(rows))
     return rows
 
 
 def _build_eval_prompt(question: str) -> str:
-    return f"Problem:\n{question}\n\nReturn the solution and final answer."
+    return build_student_math_prompt(question)
 
 
 def _format_prompt(tokenizer: Any, prompt: str) -> str:
     if getattr(tokenizer, "chat_template", None):
         return tokenizer.apply_chat_template(
-            [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
+            [{"role": "user", "content": prompt}],
             tokenize=False,
             add_generation_prompt=True,
         )
-    return f"{SYSTEM_PROMPT}\n\n{prompt}"
+    return prompt
 
 
-def _generate(model_bundle: Dict[str, Any], prompt: str, args: argparse.Namespace) -> str:
+def _generate_batch(
+    model_bundle: Dict[str, Any],
+    prompts: List[str],
+    args: argparse.Namespace,
+) -> List[str]:
     model = model_bundle["model"]
     tokenizer = model_bundle["tokenizer"]
     torch = model_bundle["torch"]
 
-    text = _format_prompt(tokenizer, prompt)
-    inputs = tokenizer(text, return_tensors="pt")
+    texts = [_format_prompt(tokenizer, prompt) for prompt in prompts]
+    inputs = tokenizer(texts, return_tensors="pt", padding=True)
     model_device = getattr(model, "device", None)
     if model_device is not None:
         inputs = {key: value.to(model_device) for key, value in inputs.items()}
@@ -194,8 +211,8 @@ def _generate(model_bundle: Dict[str, Any], prompt: str, args: argparse.Namespac
 
     with torch.inference_mode():
         output_ids = model.generate(**inputs, **generate_kwargs)
-    generated_ids = output_ids[0][inputs["input_ids"].shape[-1] :]
-    return tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+    generated_ids = output_ids[:, inputs["input_ids"].shape[-1] :]
+    return [text.strip() for text in tokenizer.batch_decode(generated_ids, skip_special_tokens=True)]
 
 
 if __name__ == "__main__":

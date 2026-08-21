@@ -1,0 +1,12 @@
+[
+  {
+    "budget_name": "cod",
+    "n": 2000,
+    "correct": 1769,
+    "correct_rate": 0.8845,
+    "avg_solution_tokens": 355.783,
+    "min_solution_tokens": 116,
+    "max_solution_tokens": 1067,
+    "declared_max_solution_tokens": 128
+  }
+]

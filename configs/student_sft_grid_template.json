@@ -8,17 +8,16 @@
       "results/real_length_budget/sft_large.jsonl"
     ],
     "training.learning_rate": [
-      0.00001,
       0.00002,
       0.00005
     ],
     "student.lora.r": [
+      4,
       8,
       16
     ],
     "student.lora.alpha": [
-      16,
-      32
+      16
     ],
     "student.lora.dropout": [
       0.05

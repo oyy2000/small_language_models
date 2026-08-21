@@ -58,4 +58,5 @@ systemd-run --user --scope -p MemoryMax=32G python3 -u scripts/4_2_eval_grid.py 
     --split test \
     --limit 50 \
     --output-dir results/student_sft_grid/eval \
-    --gpu-ids 0,1,2,3
+    --gpu-ids 0,1,2,3 \
+    --skip-existing

@@ -1,0 +1,12 @@
+[
+  {
+    "budget_name": "standard",
+    "n": 2000,
+    "correct": 1854,
+    "correct_rate": 0.927,
+    "avg_solution_tokens": 314.4225,
+    "min_solution_tokens": 125,
+    "max_solution_tokens": 1057,
+    "declared_max_solution_tokens": 512
+  }
+]

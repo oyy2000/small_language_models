@@ -12,8 +12,8 @@
   },
   "teacher": {
     "backend": "vllm",
-    "model_name": "Qwen/Qwen2.5-Math-7B-Instruct",
-    "tokenizer_name": "Qwen/Qwen2.5-Math-7B-Instruct",
+    "model_name": "Qwen/Qwen2.5-7B-Instruct",
+    "tokenizer_name": "Qwen/Qwen2.5-7B-Instruct",
     "use_chat_template": true,
     "trust_remote_code": false,
     "dtype": "bfloat16",
@@ -47,7 +47,7 @@
   ],
   "token_counter": {
     "backend": "hf_tokenizer",
-    "tokenizer_name": "Qwen/Qwen2.5-Math-7B-Instruct",
+    "tokenizer_name": "Qwen/Qwen2.5-7B-Instruct",
     "trust_remote_code": false
   },
   "output": {

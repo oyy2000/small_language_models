@@ -1,0 +1,544 @@
+{
+  "runs": [
+    {
+      "run_name": "qwen-student-sft-grid_000_train-path-sft-small_learning-rate-1e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_000_train-path-sft-small_learning-rate-1e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_000_train-path-sft-small_learning-rate-1e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_000_train-path-sft-small_learning-rate-1e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_small.jsonl",
+        "training.learning_rate": 1e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_001_train-path-sft-small_learning-rate-1e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_001_train-path-sft-small_learning-rate-1e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_001_train-path-sft-small_learning-rate-1e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_001_train-path-sft-small_learning-rate-1e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_small.jsonl",
+        "training.learning_rate": 1e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_002_train-path-sft-small_learning-rate-1e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_002_train-path-sft-small_learning-rate-1e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_002_train-path-sft-small_learning-rate-1e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_002_train-path-sft-small_learning-rate-1e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_small.jsonl",
+        "training.learning_rate": 1e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_003_train-path-sft-small_learning-rate-1e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_003_train-path-sft-small_learning-rate-1e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_003_train-path-sft-small_learning-rate-1e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_003_train-path-sft-small_learning-rate-1e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_small.jsonl",
+        "training.learning_rate": 1e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_004_train-path-sft-small_learning-rate-2e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_004_train-path-sft-small_learning-rate-2e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_004_train-path-sft-small_learning-rate-2e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_004_train-path-sft-small_learning-rate-2e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_small.jsonl",
+        "training.learning_rate": 2e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_005_train-path-sft-small_learning-rate-2e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_005_train-path-sft-small_learning-rate-2e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_005_train-path-sft-small_learning-rate-2e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_005_train-path-sft-small_learning-rate-2e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_small.jsonl",
+        "training.learning_rate": 2e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_006_train-path-sft-small_learning-rate-2e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_006_train-path-sft-small_learning-rate-2e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_006_train-path-sft-small_learning-rate-2e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_006_train-path-sft-small_learning-rate-2e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_small.jsonl",
+        "training.learning_rate": 2e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_007_train-path-sft-small_learning-rate-2e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_007_train-path-sft-small_learning-rate-2e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_007_train-path-sft-small_learning-rate-2e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_007_train-path-sft-small_learning-rate-2e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_small.jsonl",
+        "training.learning_rate": 2e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_008_train-path-sft-small_learning-rate-5e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_008_train-path-sft-small_learning-rate-5e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_008_train-path-sft-small_learning-rate-5e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_008_train-path-sft-small_learning-rate-5e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_small.jsonl",
+        "training.learning_rate": 5e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_009_train-path-sft-small_learning-rate-5e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_009_train-path-sft-small_learning-rate-5e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_009_train-path-sft-small_learning-rate-5e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_009_train-path-sft-small_learning-rate-5e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_small.jsonl",
+        "training.learning_rate": 5e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_010_train-path-sft-small_learning-rate-5e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_010_train-path-sft-small_learning-rate-5e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_010_train-path-sft-small_learning-rate-5e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_010_train-path-sft-small_learning-rate-5e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_small.jsonl",
+        "training.learning_rate": 5e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_011_train-path-sft-small_learning-rate-5e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_011_train-path-sft-small_learning-rate-5e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_011_train-path-sft-small_learning-rate-5e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_011_train-path-sft-small_learning-rate-5e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_small.jsonl",
+        "training.learning_rate": 5e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_012_train-path-sft-medium_learning-rate-1e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_012_train-path-sft-medium_learning-rate-1e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_012_train-path-sft-medium_learning-rate-1e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_012_train-path-sft-medium_learning-rate-1e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_medium.jsonl",
+        "training.learning_rate": 1e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_013_train-path-sft-medium_learning-rate-1e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_013_train-path-sft-medium_learning-rate-1e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_013_train-path-sft-medium_learning-rate-1e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_013_train-path-sft-medium_learning-rate-1e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_medium.jsonl",
+        "training.learning_rate": 1e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_014_train-path-sft-medium_learning-rate-1e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_014_train-path-sft-medium_learning-rate-1e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_014_train-path-sft-medium_learning-rate-1e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_014_train-path-sft-medium_learning-rate-1e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_medium.jsonl",
+        "training.learning_rate": 1e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_015_train-path-sft-medium_learning-rate-1e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_015_train-path-sft-medium_learning-rate-1e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_015_train-path-sft-medium_learning-rate-1e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_015_train-path-sft-medium_learning-rate-1e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_medium.jsonl",
+        "training.learning_rate": 1e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_016_train-path-sft-medium_learning-rate-2e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_016_train-path-sft-medium_learning-rate-2e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_016_train-path-sft-medium_learning-rate-2e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_016_train-path-sft-medium_learning-rate-2e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_medium.jsonl",
+        "training.learning_rate": 2e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_017_train-path-sft-medium_learning-rate-2e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_017_train-path-sft-medium_learning-rate-2e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_017_train-path-sft-medium_learning-rate-2e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_017_train-path-sft-medium_learning-rate-2e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_medium.jsonl",
+        "training.learning_rate": 2e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_018_train-path-sft-medium_learning-rate-2e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_018_train-path-sft-medium_learning-rate-2e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_018_train-path-sft-medium_learning-rate-2e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_018_train-path-sft-medium_learning-rate-2e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_medium.jsonl",
+        "training.learning_rate": 2e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_019_train-path-sft-medium_learning-rate-2e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_019_train-path-sft-medium_learning-rate-2e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_019_train-path-sft-medium_learning-rate-2e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_019_train-path-sft-medium_learning-rate-2e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_medium.jsonl",
+        "training.learning_rate": 2e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_020_train-path-sft-medium_learning-rate-5e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_020_train-path-sft-medium_learning-rate-5e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_020_train-path-sft-medium_learning-rate-5e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_020_train-path-sft-medium_learning-rate-5e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_medium.jsonl",
+        "training.learning_rate": 5e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_021_train-path-sft-medium_learning-rate-5e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_021_train-path-sft-medium_learning-rate-5e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_021_train-path-sft-medium_learning-rate-5e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_021_train-path-sft-medium_learning-rate-5e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_medium.jsonl",
+        "training.learning_rate": 5e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_022_train-path-sft-medium_learning-rate-5e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_022_train-path-sft-medium_learning-rate-5e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_022_train-path-sft-medium_learning-rate-5e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_022_train-path-sft-medium_learning-rate-5e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_medium.jsonl",
+        "training.learning_rate": 5e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_023_train-path-sft-medium_learning-rate-5e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_023_train-path-sft-medium_learning-rate-5e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_023_train-path-sft-medium_learning-rate-5e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_023_train-path-sft-medium_learning-rate-5e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_medium.jsonl",
+        "training.learning_rate": 5e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_024_train-path-sft-large_learning-rate-1e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_024_train-path-sft-large_learning-rate-1e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_024_train-path-sft-large_learning-rate-1e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_024_train-path-sft-large_learning-rate-1e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_large.jsonl",
+        "training.learning_rate": 1e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_025_train-path-sft-large_learning-rate-1e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_025_train-path-sft-large_learning-rate-1e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_025_train-path-sft-large_learning-rate-1e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_025_train-path-sft-large_learning-rate-1e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_large.jsonl",
+        "training.learning_rate": 1e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_026_train-path-sft-large_learning-rate-1e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_026_train-path-sft-large_learning-rate-1e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_026_train-path-sft-large_learning-rate-1e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_026_train-path-sft-large_learning-rate-1e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_large.jsonl",
+        "training.learning_rate": 1e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_027_train-path-sft-large_learning-rate-1e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_027_train-path-sft-large_learning-rate-1e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_027_train-path-sft-large_learning-rate-1e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_027_train-path-sft-large_learning-rate-1e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_large.jsonl",
+        "training.learning_rate": 1e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_028_train-path-sft-large_learning-rate-2e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_028_train-path-sft-large_learning-rate-2e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_028_train-path-sft-large_learning-rate-2e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_028_train-path-sft-large_learning-rate-2e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_large.jsonl",
+        "training.learning_rate": 2e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_029_train-path-sft-large_learning-rate-2e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_029_train-path-sft-large_learning-rate-2e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_029_train-path-sft-large_learning-rate-2e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_029_train-path-sft-large_learning-rate-2e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_large.jsonl",
+        "training.learning_rate": 2e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_030_train-path-sft-large_learning-rate-2e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_030_train-path-sft-large_learning-rate-2e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_030_train-path-sft-large_learning-rate-2e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_030_train-path-sft-large_learning-rate-2e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_large.jsonl",
+        "training.learning_rate": 2e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_031_train-path-sft-large_learning-rate-2e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_031_train-path-sft-large_learning-rate-2e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_031_train-path-sft-large_learning-rate-2e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_031_train-path-sft-large_learning-rate-2e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_large.jsonl",
+        "training.learning_rate": 2e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_032_train-path-sft-large_learning-rate-5e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_032_train-path-sft-large_learning-rate-5e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_032_train-path-sft-large_learning-rate-5e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_032_train-path-sft-large_learning-rate-5e-05_r-8_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_large.jsonl",
+        "training.learning_rate": 5e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_033_train-path-sft-large_learning-rate-5e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_033_train-path-sft-large_learning-rate-5e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_033_train-path-sft-large_learning-rate-5e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_033_train-path-sft-large_learning-rate-5e-05_r-8_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_large.jsonl",
+        "training.learning_rate": 5e-05,
+        "student.lora.r": 8,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_034_train-path-sft-large_learning-rate-5e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_034_train-path-sft-large_learning-rate-5e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_034_train-path-sft-large_learning-rate-5e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_034_train-path-sft-large_learning-rate-5e-05_r-16_alpha-16_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_large.jsonl",
+        "training.learning_rate": 5e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 16,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    },
+    {
+      "run_name": "qwen-student-sft-grid_035_train-path-sft-large_learning-rate-5e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "config_path": "results/student_sft_grid/configs/qwen-student-sft-grid_035_train-path-sft-large_learning-rate-5e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.json",
+      "output_dir": "checkpoints/student_sft_grid/qwen-student-sft-grid_035_train-path-sft-large_learning-rate-5e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8",
+      "log_path": "results/student_sft_grid/logs/qwen-student-sft-grid_035_train-path-sft-large_learning-rate-5e-05_r-16_alpha-32_dropout-0p05_num-train-epochs-1_gradient-accumulation-steps-8.log",
+      "overrides": {
+        "data.train_path": "results/real_length_budget/sft_large.jsonl",
+        "training.learning_rate": 5e-05,
+        "student.lora.r": 16,
+        "student.lora.alpha": 32,
+        "student.lora.dropout": 0.05,
+        "training.num_train_epochs": 1,
+        "training.gradient_accumulation_steps": 8
+      }
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+dataset,path,n_examples,n_unique_problems,correct_count,correct_rate,max_solution_tokens_budget,mean_solution_tokens,median_solution_tokens,p10_solution_tokens,p90_solution_tokens,min_solution_tokens,max_solution_tokens,mean_prompt_chars,mean_completion_chars
+small,results/real_length_budget/sft_small.jsonl,1096,1096,1096,1.0,128,43.59306569343066,40.0,23.0,69.0,14,121,220.03010948905109,75.46350364963503
+medium,results/real_length_budget/sft_medium.jsonl,1541,1541,1541,1.0,256,110.44192083062946,104.0,64.0,161.0,31,506,232.01492537313433,311.65801427644385
+large,results/real_length_budget/sft_large.jsonl,1350,1350,1350,1.0,512,225.76592592592593,216.0,150.0,317.1999999999998,73,664,231.11333333333334,736.6022222222222

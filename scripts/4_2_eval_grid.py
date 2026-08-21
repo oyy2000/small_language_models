@@ -36,6 +36,7 @@ def parse_args() -> argparse.Namespace:
         help="Base model name used with each LoRA adapter.",
     )
     parser.add_argument("--split", default="test", help="Eval split.")
+    parser.add_argument("--start-index", type=int, default=0, help="Zero-based first eval example.")
     parser.add_argument("--limit", type=int, default=50, help="Number of eval examples per run.")
     parser.add_argument(
         "--output-dir",
@@ -129,6 +130,8 @@ def _eval_command(args: argparse.Namespace, entry: Dict[str, Any]) -> List[str]:
         entry["adapter_path"],
         "--split",
         args.split,
+        "--start-index",
+        str(args.start_index),
         "--limit",
         str(args.limit),
         "--output-jsonl",

@@ -32,6 +32,14 @@ class TraceRecord:
     is_correct: bool
     solution_token_count: int
     metadata: Dict[str, Any] = field(default_factory=dict)
+    generator_name: Optional[str] = None
+    generator_size_b: Optional[float] = None
+    candidate_index: int = 0
+    generation_seed: Optional[int] = None
+    budget_compliant: Optional[bool] = None
+    selected_for_sft: bool = False
+    config_hash: Optional[str] = None
+    source_hash: Optional[str] = None
 
 
 def read_jsonl(path: Path) -> Iterator[Dict[str, Any]]:
@@ -66,4 +74,3 @@ def trace_to_dict(record: TraceRecord) -> Dict[str, Any]:
 
 def traces_from_jsonl(path: Path) -> List[TraceRecord]:
     return [trace_from_dict(item) for item in read_jsonl(path)]
-

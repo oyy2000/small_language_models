@@ -1,0 +1,3 @@
+dataset,path,n_examples,n_unique_problems,correct_count,correct_rate,max_solution_tokens_budget,mean_solution_tokens,median_solution_tokens,p10_solution_tokens,p90_solution_tokens,min_solution_tokens,max_solution_tokens,mean_prompt_chars,mean_completion_chars
+standard,results/standard_prompt/sft_merged.jsonl,1854,1854,1854,1.0,512,293.9929881337648,279.0,190.0,404.70000000000005,125,1024,232.0933117583603,972.1736785329018
+cod,results/chain_of_draft/sft_merged.jsonl,1769,1769,1769,1.0,128,301.14132278123236,279.0,189.8,415.20000000000005,116,1024,233.936122102883,999.319389485585

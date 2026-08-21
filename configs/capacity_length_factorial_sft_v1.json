@@ -1,0 +1,8 @@
+{
+  "parent_config_sha256": "901fd9c31edcd77ab357b03f5e1cbb8cd0c92be3db31f9cec98bd70d166edcdc",
+  "training_overrides": {
+    "per_device_train_batch_size": 4,
+    "gradient_accumulation_steps": 1
+  },
+  "rationale": "Consume every selected example exactly once under Transformers 4.48.3; gradient accumulation greater than one can omit an incomplete tail accumulation."
+}

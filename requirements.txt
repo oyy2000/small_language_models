@@ -1,12 +1,24 @@
 # Standard-library-only local checks do not require this file.
-# Install these packages before real teacher, dataset, or student runs.
-datasets
-transformers
-accelerate
-trl
-peft
-torch
-matplotlib
+# Install these packages before real teacher, dataset, evaluation, or student runs.
+
+# Dataset loading and prompt-template parsing.
+datasets>=3.2.0
+PyYAML>=6.0.2
+
+# Hugging Face generation, evaluation, and TRL SFT.
+torch>=2.10.0
+transformers>=4.48.3
+accelerate>=1.2.1
+trl>=0.9.6
+peft>=0.12.0
+
+# Analysis figures.
+matplotlib>=3.10.8
+numpy>=1.26.0
+pandas>=2.2.0
+statsmodels>=0.14.0
 
 # Optional for high-throughput teacher generation on GPU clusters.
+# The default teacher configs use backend="vllm", but some cluster envs provide
+# vLLM separately from the SFT environment.
 # vllm

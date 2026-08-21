@@ -61,6 +61,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip runs whose checkpoint output directory already exists.",
     )
+    parser.add_argument(
+        "--continue-epochs-from-previous",
+        action="store_true",
+        help=(
+            "For grids containing training.num_train_epochs, make each later epoch run resume from "
+            "the previous epoch's LoRA adapter and train only the epoch delta."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -72,6 +80,8 @@ def main() -> None:
     base_config.pop("_config_path", None)
     grid_config = _read_json(Path(args.grid_config))
     runs = _build_runs(base_config, grid_config)
+    if args.continue_epochs_from_previous:
+        _configure_epoch_continuations(runs)
     work_dir = Path(args.work_dir)
     config_dir = work_dir / "configs"
     log_dir = work_dir / "logs"
@@ -88,6 +98,7 @@ def main() -> None:
                 "config_path": str(config_path),
                 "output_dir": str(output_dir),
                 "log_path": str(log_dir / f"{run_name}.log"),
+                "resume_adapter_path": _resume_adapter_path(config),
                 "overrides": overrides,
             }
         )
@@ -162,6 +173,42 @@ def _build_runs(base_config: Dict[str, Any], grid_config: Dict[str, Any]) -> Lis
     return runs
 
 
+def _configure_epoch_continuations(runs: List[RunSpec]) -> None:
+    epoch_key = "training.num_train_epochs"
+    grouped_runs: Dict[Tuple[Tuple[str, Any], ...], List[RunSpec]] = {}
+    for run in runs:
+        _, _, overrides = run
+        if epoch_key not in overrides:
+            continue
+        group_key = tuple((key, value) for key, value in overrides.items() if key != epoch_key)
+        grouped_runs.setdefault(group_key, []).append(run)
+
+    for grouped in grouped_runs.values():
+        grouped.sort(key=lambda run: float(run[2][epoch_key]))
+        previous_run: RunSpec | None = None
+        for run in grouped:
+            _, config, overrides = run
+            current_epoch = float(overrides[epoch_key])
+            if previous_run is None:
+                previous_run = run
+                continue
+
+            _, previous_config, previous_overrides = previous_run
+            previous_epoch = float(previous_overrides[epoch_key])
+            epoch_delta = current_epoch - previous_epoch
+            if epoch_delta <= 0:
+                raise ValueError(
+                    f"Epoch values must increase within a continuation group: "
+                    f"previous={previous_epoch} current={current_epoch}"
+                )
+            config.setdefault("student", {})["resume_adapter_path"] = previous_config["training"]["output_dir"]
+            training_config = config.setdefault("training", {})
+            training_config["num_train_epochs"] = epoch_delta
+            training_config["target_num_train_epochs"] = current_epoch
+            training_config["resume_from_num_train_epochs"] = previous_epoch
+            previous_run = run
+
+
 def _as_list(value: Any) -> List[Any]:
     return value if isinstance(value, list) else [value]
 
@@ -188,6 +235,8 @@ def _short_value(value: Any) -> str:
     if isinstance(value, str):
         path = Path(value)
         if path.suffix:
+            if path.stem in {"sft_merged", "traces_merged"} and path.parent.name:
+                return path.parent.name
             return path.stem
         return value
     if isinstance(value, float):
@@ -220,12 +269,25 @@ def _run_commands(
     available_gpus = list(gpu_ids)
 
     while pending or running:
+        made_progress = False
         can_launch = lambda: pending and len(running) < max_parallel and (not gpu_ids or available_gpus)
         while can_launch():
-            entry, command = pending.pop(0)
-            if skip_existing and Path(entry["output_dir"]).exists():
+            pending_index = _next_launchable_pending_index(pending, skip_existing)
+            if pending_index is None:
+                break
+            entry, command = pending.pop(pending_index)
+            if skip_existing and _checkpoint_complete(Path(entry["output_dir"])):
                 logging.info("skip_existing run=%s output_dir=%s", entry["run_name"], entry["output_dir"])
+                made_progress = True
                 continue
+            if skip_existing and Path(entry["output_dir"]).exists():
+                logging.warning("rerun_incomplete_checkpoint run=%s output_dir=%s", entry["run_name"], entry["output_dir"])
+            if entry.get("resume_adapter_path"):
+                logging.info(
+                    "resume_adapter run=%s resume_adapter_path=%s",
+                    entry["run_name"],
+                    entry["resume_adapter_path"],
+                )
             gpu_id = available_gpus.pop(0) if gpu_ids else None
             env = os.environ.copy()
             if gpu_id is not None:
@@ -236,6 +298,7 @@ def _run_commands(
             logging.info("command=%s", _format_command(command, gpu_id))
             process = subprocess.Popen(command, cwd=PROJECT_ROOT, env=env, stdout=log_handle, stderr=subprocess.STDOUT)
             running.append((process, entry, log_handle))
+            made_progress = True
 
         still_running: List[Tuple[subprocess.Popen[Any], Dict[str, Any], Any]] = []
         for process, entry, log_handle in running:
@@ -253,11 +316,46 @@ def _run_commands(
                 entry["returncode"] = code
                 failures.append(entry)
                 logging.error("failed run=%s returncode=%s", entry["run_name"], code)
+            made_progress = True
         running = still_running
+        if pending and not running and not made_progress:
+            for entry, _ in pending:
+                entry["returncode"] = "blocked_dependency"
+                failures.append(entry)
+                logging.error(
+                    "blocked_dependency run=%s resume_adapter_path=%s",
+                    entry["run_name"],
+                    entry.get("resume_adapter_path"),
+                )
+            pending.clear()
         if running:
             time.sleep(5)
 
     return failures
+
+
+def _next_launchable_pending_index(
+    pending: List[Tuple[Dict[str, Any], List[str]]],
+    skip_existing: bool,
+) -> int | None:
+    for index, (entry, _) in enumerate(pending):
+        if skip_existing and _checkpoint_complete(Path(entry["output_dir"])):
+            return index
+        resume_adapter_path = entry.get("resume_adapter_path")
+        if resume_adapter_path and not _checkpoint_complete(Path(resume_adapter_path)):
+            continue
+        return index
+    return None
+
+
+def _checkpoint_complete(output_dir: Path) -> bool:
+    return (output_dir / "adapter_config.json").is_file() and (output_dir / "adapter_model.safetensors").is_file()
+
+
+def _resume_adapter_path(config: Dict[str, Any]) -> str | None:
+    student_config = config.get("student", {})
+    training_config = config.get("training", {})
+    return student_config.get("resume_adapter_path") or training_config.get("resume_adapter_path")
 
 
 def _format_command(command: Iterable[str], gpu_id: str | None = None) -> str:

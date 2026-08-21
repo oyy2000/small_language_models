@@ -5,8 +5,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 CONFIG="${1:-configs/real_length_budget_template.json}"
-OUTPUT_DIR="${2:-results/real_length_budget}"
+if [[ $# -ge 2 ]]; then
+  OUTPUT_DIR="$2"
+else
+  config_name="$(basename "${CONFIG}")"
+  config_name="${config_name%.json}"
+  config_name="${config_name%_template}"
+  OUTPUT_DIR="results/${config_name}"
+fi
 GPU_IDS="${GPU_IDS:-0,1,2,3}"
+LOG_EVERY="${LOG_EVERY:-10}"
+export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 
 IFS=',' read -r -a GPUS <<< "${GPU_IDS}"
 NUM_SHARDS="${#GPUS[@]}"
@@ -18,6 +27,7 @@ echo "config=${CONFIG}"
 echo "output_dir=${OUTPUT_DIR}"
 echo "gpu_ids=${GPU_IDS}"
 echo "num_shards=${NUM_SHARDS}"
+echo "log_every=${LOG_EVERY}"
 
 pids=()
 statuses=()
@@ -31,7 +41,8 @@ for shard_index in "${!GPUS[@]}"; do
       --config "${CONFIG}" \
       --output-dir "${OUTPUT_DIR}" \
       --num-shards "${NUM_SHARDS}" \
-      --shard-index "${shard_index}"
+      --shard-index "${shard_index}" \
+      --log-every "${LOG_EVERY}"
   ) > "${log_path}" 2>&1 &
   pids+=("$!")
 done

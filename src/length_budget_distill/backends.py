@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Protocol
+from typing import Any, Dict, List, Protocol, Sequence
 
 from .records import ProblemRecord
 
@@ -14,6 +14,21 @@ class TeacherBackend(Protocol):
 
     def generate(self, problem: ProblemRecord, budget: Dict[str, Any], prompt: str) -> str:
         raise NotImplementedError("TeacherBackend implementations must define generate().")
+
+    def generate_batch(
+        self,
+        requests: Sequence["GenerationRequest"],
+        num_candidates: int = 1,
+    ) -> List[List[str]]:
+        raise NotImplementedError("TeacherBackend implementations must define generate_batch().")
+
+
+@dataclass(frozen=True)
+class GenerationRequest:
+    problem: ProblemRecord
+    budget: Dict[str, Any]
+    prompt: str
+    seed: int | None = None
 
 
 @dataclass
@@ -36,6 +51,18 @@ class LocalRuleTeacherBackend:
             "and compute it carefully. The resulting value satisfies the question's condition. "
             f"Therefore the final value is {answer}. Answer: {answer}"
         )
+
+    def generate_batch(
+        self,
+        requests: Sequence[GenerationRequest],
+        num_candidates: int = 1,
+    ) -> List[List[str]]:
+        if num_candidates <= 0:
+            raise ValueError("num_candidates must be positive.")
+        return [
+            [self.generate(request.problem, request.budget, request.prompt) for _ in range(num_candidates)]
+            for request in requests
+        ]
 
 
 def _max_new_tokens_for_budget(generation_config: Dict[str, Any], budget: Dict[str, Any]) -> int:
@@ -142,8 +169,23 @@ class HFTransformersTeacherBackend:
             **_model_kwargs(teacher_config, torch),
         )
         self.model.eval()
+        self.torch = torch
 
     def generate(self, problem: ProblemRecord, budget: Dict[str, Any], prompt: str) -> str:
+        request = GenerationRequest(problem=problem, budget=budget, prompt=prompt)
+        return self.generate_batch([request], num_candidates=1)[0][0]
+
+    def generate_batch(
+        self,
+        requests: Sequence[GenerationRequest],
+        num_candidates: int = 1,
+    ) -> List[List[str]]:
+        if num_candidates <= 0:
+            raise ValueError("num_candidates must be positive.")
+        return [self._generate_candidates(request, num_candidates) for request in requests]
+
+    def _generate_candidates(self, request: GenerationRequest, num_candidates: int) -> List[str]:
+        problem, budget, prompt = request.problem, request.budget, request.prompt
         max_new_tokens = _max_new_tokens_for_budget(self.generation_config, budget)
         text = _format_generation_prompt(self.tokenizer, prompt, self.teacher_config)
         inputs = self.tokenizer(text, return_tensors="pt")
@@ -152,9 +194,15 @@ class HFTransformersTeacherBackend:
             inputs = {key: value.to(model_device) for key, value in inputs.items()}
 
         generate_kwargs = _hf_generate_kwargs(self.generation_config, self.tokenizer, max_new_tokens)
+        if request.seed is not None:
+            self.torch.manual_seed(int(request.seed))
+        generate_kwargs["num_return_sequences"] = num_candidates
         output_ids = self.model.generate(**inputs, **generate_kwargs)
-        generated_ids = output_ids[0][inputs["input_ids"].shape[-1] :]
-        return self.tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+        prompt_length = inputs["input_ids"].shape[-1]
+        return [
+            self.tokenizer.decode(output_row[prompt_length:], skip_special_tokens=True).strip()
+            for output_row in output_ids
+        ]
 
 
 class VLLMTeacherBackend:
@@ -190,15 +238,42 @@ class VLLMTeacherBackend:
         )
 
     def generate(self, problem: ProblemRecord, budget: Dict[str, Any], prompt: str) -> str:
-        text = _format_generation_prompt(self.tokenizer, prompt, self.teacher_config)
-        outputs = self.llm.generate([text], self._sampling_params_for_budget(budget))
-        return outputs[0].outputs[0].text.strip()
+        request = GenerationRequest(problem=problem, budget=budget, prompt=prompt)
+        return self.generate_batch([request], num_candidates=1)[0][0]
 
-    def _sampling_params_for_budget(self, budget: Dict[str, Any]) -> Any:
+    def generate_batch(
+        self,
+        requests: Sequence[GenerationRequest],
+        num_candidates: int = 1,
+    ) -> List[List[str]]:
+        if num_candidates <= 0:
+            raise ValueError("num_candidates must be positive.")
+        texts = [
+            _format_generation_prompt(self.tokenizer, request.prompt, self.teacher_config)
+            for request in requests
+        ]
+        sampling_params = [
+            self._sampling_params_for_budget(
+                request.budget,
+                seed=request.seed,
+                num_candidates=num_candidates,
+            )
+            for request in requests
+        ]
+        outputs = self.llm.generate(texts, sampling_params)
+        return [[candidate.text.strip() for candidate in request_output.outputs] for request_output in outputs]
+
+    def _sampling_params_for_budget(
+        self,
+        budget: Dict[str, Any],
+        seed: int | None = None,
+        num_candidates: int = 1,
+    ) -> Any:
         kwargs: Dict[str, Any] = {
             "temperature": float(self.generation_config.get("temperature", 0.0)),
             "top_p": float(self.generation_config.get("top_p", 1.0)),
             "max_tokens": _max_new_tokens_for_budget(self.generation_config, budget),
+            "n": num_candidates,
         }
         for key in (
             "top_k",
@@ -211,6 +286,8 @@ class VLLMTeacherBackend:
         ):
             if key in self.generation_config:
                 kwargs[key] = self.generation_config[key]
+        if seed is not None:
+            kwargs["seed"] = int(seed)
         return self.sampling_params_cls(**kwargs)
 
 
