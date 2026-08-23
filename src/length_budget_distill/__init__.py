@@ -9,8 +9,8 @@ __all__ = [
     "prompts",
     "records",
     "sft_format",
+    "sft_loss_plot",
     "tokenization",
     "training",
     "verifiers",
 ]
-

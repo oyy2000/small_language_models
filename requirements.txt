@@ -13,6 +13,9 @@ trl>=0.9.6
 peft>=0.12.0
 safetensors>=0.4.5
 
+# Symbolic answer extraction/equivalence for MATH-family generation and evaluation.
+math-verify[antlr4_13_2]==0.9.0
+
 # Analysis figures.
 matplotlib>=3.10.8
 numpy>=1.26.0

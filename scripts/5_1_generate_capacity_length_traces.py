@@ -31,7 +31,12 @@ from length_budget_distill.factorial import (
 from length_budget_distill.prompts import build_teacher_prompt, get_prompt_strategy
 from length_budget_distill.records import ProblemRecord, TraceRecord, trace_to_dict, write_jsonl
 from length_budget_distill.tokenization import make_token_counter
-from length_budget_distill.verifiers import VERIFIER_VERSION, extract_final_answer, verify_answer
+from length_budget_distill.verifiers import (
+    extract_answer_for_verifier,
+    verifier_name,
+    verifier_version,
+    verify_answer_for_verifier,
+)
 
 
 Task = Tuple[int, ProblemRecord, Dict[str, Any], GenerationRequest]
@@ -62,6 +67,7 @@ def main() -> None:
     config = load_config(args.config)
     config_for_hash = {key: value for key, value in config.items() if key != "_config_path"}
     config_hash = canonical_sha256(config_for_hash)
+    configured_verifier = verifier_name(config)
     generator = generator_by_name(config, args.generator_name)
     generation = dict(config.get("generation", {}))
     num_candidates = int(generation.get("num_candidates", 3))
@@ -160,7 +166,7 @@ def main() -> None:
                 {"problem_id": problem.problem_id, "question": problem.question, "answer": problem.answer}
             )
             for candidate_index, solution in enumerate(candidates):
-                predicted = extract_final_answer(solution)
+                predicted = extract_answer_for_verifier(solution, configured_verifier)
                 token_count = token_counter.count(solution)
                 trace_id = (
                     f"{problem.problem_id}:{args.generator_name}:{budget['name']}:"
@@ -179,7 +185,11 @@ def main() -> None:
                         prompt=request.prompt if config.get("output", {}).get("include_prompt_in_trace", True) else "",
                         solution=solution,
                         predicted_answer=predicted,
-                        is_correct=verify_answer(predicted, problem.answer),
+                        is_correct=verify_answer_for_verifier(
+                            predicted,
+                            problem.answer,
+                            configured_verifier,
+                        ),
                         solution_token_count=token_count,
                         metadata={
                             "problem_metadata": problem.metadata,
@@ -239,7 +249,8 @@ def main() -> None:
         "num_shards": args.num_shards,
         "raw_path": str(raw_path),
         "raw_sha256": file_sha256(raw_path),
-        "verifier_version": VERIFIER_VERSION,
+        "verifier": configured_verifier,
+        "verifier_version": verifier_version(configured_verifier),
         "elapsed_seconds": time.monotonic() - started,
         "model_revision": getattr(getattr(backend, "tokenizer", None), "init_kwargs", {}).get("_commit_hash"),
         "runtime": runtime_metadata(),

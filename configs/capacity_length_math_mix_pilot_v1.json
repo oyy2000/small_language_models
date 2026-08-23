@@ -1,0 +1,156 @@
+{
+  "experiment_name": "capacity_length_math_mix_pilot_v1",
+  "evidence_level": "exploratory_single_seed_pilot",
+  "dataset": {
+    "source": "local_jsonl",
+    "path": "results/capacity_length_math_mix_pilot_v1/pilot/source/math_train_source_1000.jsonl",
+    "question_field": "question",
+    "answer_field": "answer",
+    "answer_format": "raw",
+    "verifier": "math_verify",
+    "max_examples": 1000
+  },
+  "math_train_source": {
+    "dataset_name": "EleutherAI/hendrycks_math",
+    "revision": "21a5633873b6a120296cce3e2df9d5550074f4a3",
+    "dataset_configs": [
+      "algebra",
+      "counting_and_probability",
+      "geometry",
+      "intermediate_algebra",
+      "number_theory",
+      "prealgebra",
+      "precalculus"
+    ],
+    "split": "train",
+    "sample_count": 1000,
+    "sampling_seed": 20260823,
+    "stratify_by": ["subject", "level"]
+  },
+  "generators": [
+    {
+      "name": "qwen2p5_7b",
+      "size_b": 7.0,
+      "model_name": "Qwen/Qwen2.5-7B-Instruct",
+      "model_path": "/mnt/beegfs/youyang7/.cache/huggingface/hub/models--Qwen--Qwen2.5-7B-Instruct/snapshots/a09a35458c702b33eeacc393d103063234e8bc28",
+      "tokenizer_name": "Qwen/Qwen2.5-7B-Instruct",
+      "preferred_node": "c31",
+      "backend": "vllm",
+      "dtype": "bfloat16",
+      "tensor_parallel_size": 1,
+      "trust_remote_code": false,
+      "llm_kwargs": {
+        "gpu_memory_utilization": 0.85,
+        "max_model_len": 4096,
+        "max_num_seqs": 48
+      }
+    }
+  ],
+  "generation": {
+    "num_candidates": 3,
+    "base_seed": 20260823,
+    "batch_size": 32,
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "max_new_tokens": 1024,
+    "cap_max_new_tokens_by_budget": false,
+    "stop": ["<|im_end|>"]
+  },
+  "length_budgets": [
+    {
+      "name": "short_128",
+      "max_solution_tokens": 128,
+      "style_hint": "Use compressed equations and only essential words, but always include the final Answer line."
+    },
+    {
+      "name": "medium_256",
+      "max_solution_tokens": 256,
+      "style_hint": "Use concise step-by-step reasoning and include the final Answer line."
+    },
+    {
+      "name": "long_512",
+      "max_solution_tokens": 512,
+      "style_hint": "Use detailed step-by-step reasoning and include the final Answer line."
+    }
+  ],
+  "token_counter": {
+    "backend": "hf_tokenizer",
+    "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "trust_remote_code": false,
+    "tokenizer_kwargs": {
+      "cache_dir": "/mnt/beegfs/youyang7/.cache/huggingface/hub"
+    }
+  },
+  "output": {
+    "include_prompt_in_trace": true
+  },
+  "balancing": {
+    "pilot_min_common_problems": 300,
+    "training_seeds": [17],
+    "max_equal_token_gap": 512,
+    "balance_tokens_within_source": true
+  },
+  "student": {
+    "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "trust_remote_code": false,
+    "torch_dtype": "bfloat16",
+    "use_lora": true,
+    "lora": {
+      "r": 4,
+      "alpha": 16,
+      "dropout": 0.05,
+      "target_modules": "all-linear"
+    }
+  },
+  "training": {
+    "num_train_epochs": 1,
+    "per_device_train_batch_size": 4,
+    "gradient_accumulation_steps": 1,
+    "learning_rate": 0.00002,
+    "warmup_ratio": 0.03,
+    "logging_steps": 10,
+    "save_steps": 200,
+    "bf16": true,
+    "gradient_checkpointing": true,
+    "max_length": 2048,
+    "completion_only_loss": true,
+    "assistant_only_loss": false,
+    "packing": false,
+    "report_to": "none"
+  },
+  "evaluation_suite": {
+    "sampling_seed": 20260823,
+    "gsm8k": {
+      "dataset_name": "openai/gsm8k",
+      "revision": "740312add88f781978c0658806c59bc2815b9866",
+      "dataset_config": "main",
+      "split": "test",
+      "window_start": 50,
+      "window_stop": 1319,
+      "sample_count": 200,
+      "verifier": "gsm8k_numeric",
+      "max_new_tokens": 512
+    },
+    "math500": {
+      "dataset_name": "HuggingFaceH4/MATH-500",
+      "revision": "6e4ed1a2a79af7d8630a6b768ec859cb5af4d3be",
+      "split": "test",
+      "sample_count": 100,
+      "stratify_by": ["subject", "level"],
+      "verifier": "math_verify",
+      "max_new_tokens": 1024
+    },
+    "aime2025": {
+      "dataset_name": "yentinglin/aime_2025",
+      "revision": "6f71d77b0b89b9dabe07ab466c51df33f514df7f",
+      "split": "train",
+      "sample_count": 30,
+      "verifier": "gsm8k_numeric",
+      "max_new_tokens": 1024
+    },
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "batch_size": 32
+  }
+}

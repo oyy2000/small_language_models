@@ -28,7 +28,12 @@ from length_budget_distill.factorial import (
     select_shortest_correct,
 )
 from length_budget_distill.records import read_jsonl, trace_from_dict, trace_to_dict, write_jsonl
-from length_budget_distill.verifiers import VERIFIER_VERSION, extract_final_answer, verify_answer
+from length_budget_distill.verifiers import (
+    extract_answer_for_verifier,
+    verifier_name,
+    verifier_version,
+    verify_answer_for_verifier,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -36,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", default="configs/capacity_length_factorial_v1.json")
     parser.add_argument("--input-glob", required=True, help="Recursive glob for raw shard JSONL files.")
     parser.add_argument("--output-dir", required=True)
-    parser.add_argument("--stage", choices=["smoke", "formal"], required=True)
+    parser.add_argument("--stage", choices=["smoke", "pilot", "formal"], required=True)
     parser.add_argument("--expected-problems", type=int, required=True)
     return parser.parse_args()
 
@@ -47,6 +52,7 @@ def main() -> None:
     config = load_config(args.config)
     config_for_hash = {key: value for key, value in config.items() if key != "_config_path"}
     config_hash = canonical_sha256(config_for_hash)
+    configured_verifier = verifier_name(config)
     num_candidates = int(config.get("generation", {}).get("num_candidates", 3))
     conditions = expected_conditions(config)
     if not conditions:
@@ -71,8 +77,12 @@ def main() -> None:
     verification_mismatches: List[Dict[str, Any]] = []
     traces = []
     for trace in stored_traces:
-        predicted_answer = extract_final_answer(trace.solution)
-        reverified_correct = verify_answer(predicted_answer, trace.answer)
+        predicted_answer = extract_answer_for_verifier(trace.solution, configured_verifier)
+        reverified_correct = verify_answer_for_verifier(
+            predicted_answer,
+            trace.answer,
+            configured_verifier,
+        )
         if reverified_correct != trace.is_correct or predicted_answer != trace.predicted_answer:
             verification_mismatches.append(
                 {
@@ -122,7 +132,7 @@ def main() -> None:
     minimum_common = int(
         config.get("balancing", {}).get(
             f"{args.stage}_min_common_problems",
-            50 if args.stage == "smoke" else 500,
+            50 if args.stage == "smoke" else 300 if args.stage == "pilot" else 500,
         )
     )
 
@@ -157,7 +167,8 @@ def main() -> None:
         "num_candidates": num_candidates,
         "expected_total_candidates": len(conditions) * args.expected_problems * num_candidates,
         "actual_total_candidates": len(traces),
-        "verifier_version": VERIFIER_VERSION,
+        "verifier": configured_verifier,
+        "verifier_version": verifier_version(configured_verifier),
         "verification_mismatch_count": len(verification_mismatches),
         "verification_mismatch_examples": verification_mismatches[:50],
         "selected_trace_count": len(selected),
