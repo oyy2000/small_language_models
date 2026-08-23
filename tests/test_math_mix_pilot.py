@@ -16,6 +16,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from length_budget_distill.factorial import canonical_sha256
 from length_budget_distill.math_mix import (
+    diagnose_common_support_selection,
     normalized_question_sha256,
     proportional_stratified_sample,
 )
@@ -75,6 +76,22 @@ class MathMixPilotTest(unittest.TestCase):
             normalized_question_sha256("Find x."),
             normalized_question_sha256("Find y."),
         )
+
+    def test_common_support_diagnosis_measures_difficulty_shift(self) -> None:
+        source = [
+            {"id": "easy", "level": 1, "subject": "algebra", "question_sha256": "a"},
+            {"id": "hard", "level": 5, "subject": "geometry", "question_sha256": "b"},
+        ]
+        evaluation = [
+            {"id": "eval", "level": 5, "subject": "Geometry", "question_sha256": "c"},
+        ]
+        diagnosis = diagnose_common_support_selection(source, ["easy"], evaluation)
+        self.assertEqual(diagnosis["source"]["mean_level"], 3.0)
+        self.assertEqual(diagnosis["common_support"]["mean_level"], 1.0)
+        self.assertEqual(diagnosis["evaluation"]["mean_level"], 5.0)
+        self.assertEqual(diagnosis["retention_by_level"][0]["retention_rate"], 1.0)
+        self.assertEqual(diagnosis["retention_by_level"][1]["retention_rate"], 0.0)
+        self.assertEqual(diagnosis["question_hash_overlap"]["source_vs_evaluation"], 0)
 
     def test_pilot_overlay_is_bound_and_cardinalities_are_locked(self) -> None:
         config_path = PROJECT_ROOT / "configs/capacity_length_math_mix_pilot_v1.json"

@@ -22,6 +22,7 @@ from length_budget_distill.logit_kd import (
     read_json,
     read_jsonl,
     resolve_project_path,
+    supervision_mode,
     validate_budget_dataset,
     validated_training_marker,
     write_json,
@@ -228,6 +229,7 @@ def main() -> None:
     logit_shards = 0
     logit_records = 0
     for budget_name in protocol["budgets"]:
+        expected_records = int(protocol["budgets"][budget_name]["expected_records"])
         for method in ("teacher", "base", "sft", "kd"):
             snapshot_dir = result_root / "formal" / "logits" / budget_name / method
             observed_indices = set()
@@ -276,7 +278,11 @@ def main() -> None:
                 observed_indices.add(shard_index)
                 logit_shards += 1
             _expect(observed_indices == set(range(num_shards)), f"logit shard coverage mismatch: {budget_name}/{method}", errors)
-            _expect(source_indices == set(range(881)), f"logit record coverage mismatch: {budget_name}/{method}", errors)
+            _expect(
+                source_indices == set(range(expected_records)),
+                f"logit record coverage mismatch: {budget_name}/{method}",
+                errors,
+            )
             logit_records += len(source_indices)
             logit_snapshots += 1
     counts["logit_snapshots"] = logit_snapshots
@@ -322,6 +328,7 @@ def main() -> None:
         "status": "passed" if not errors else "failed",
         "experiment_name": protocol["experiment_name"],
         "protocol_variant": protocol["protocol_variant"],
+        "supervision_mode": supervision_mode(protocol),
         "scope": protocol["scope"],
         "protocol_hash": digest,
         "counts": counts,

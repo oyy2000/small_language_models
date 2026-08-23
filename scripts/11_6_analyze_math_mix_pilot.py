@@ -21,6 +21,12 @@ if str(SRC_ROOT) not in sys.path:
 from length_budget_distill.factorial import canonical_sha256, file_sha256
 from length_budget_distill.factorial_analysis import holm_adjust, paired_cluster_bootstrap
 from length_budget_distill.records import read_jsonl
+from length_budget_distill.sft_accuracy_plot import (
+    BASELINE_COLOR,
+    BASELINE_LINESTYLE,
+    COMPARISON_COLORS,
+    plot_grouped_accuracy_bars,
+)
 
 
 BUDGETS = ("short_128", "medium_256", "long_512")
@@ -233,10 +239,14 @@ def _exact_mcnemar_p_value(left_only: int, right_only: int) -> float:
 
 def _write_accuracy_figure(rows: Sequence[Mapping[str, Any]], png_path: Path, pdf_path: Path) -> None:
     import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
 
     labels = {"short_128": "Short (128)", "medium_256": "Medium (256)", "long_512": "Long (512)"}
     dataset_titles = {"gsm8k": "GSM8K test subset (n=200)", "math500": "MATH-500 subset (n=100)", "aime2025": "AIME 2025 (n=30)"}
-    colors = {"gsm_only": "#4C78A8", "math_mix": "#E45756"}
+    variant_labels = {"gsm_only": "GSM8K-only", "math_mix": "GSM8K + MATH"}
+    colors = dict(zip(variant_labels.values(), COMPARISON_COLORS))
+    y_limits = {"gsm8k": (0.0, 0.82), "math500": (0.0, 0.68), "aime2025": (0.0, 0.20)}
     figure, axes = plt.subplots(2, 3, figsize=(13.5, 7.8), sharex=True)
     for row_index, mode in enumerate(MODES):
         for column_index, dataset_name in enumerate(DATASETS):
@@ -247,17 +257,11 @@ def _write_accuracy_figure(rows: Sequence[Mapping[str, Any]], png_path: Path, pd
             ]
             if len(base_rows) != 1:
                 raise ValueError(f"Missing base metric for {dataset_name}")
-            axis.axhline(
-                100.0 * float(base_rows[0]["accuracy"]),
-                color="#777777",
-                linestyle="--",
-                linewidth=1.3,
-                label="Base" if row_index == 0 and column_index == 0 else None,
-            )
+            series_values = {}
+            series_intervals = {}
             for variant in ("gsm_only", "math_mix"):
                 values = []
-                lower = []
-                upper = []
+                intervals = []
                 for budget in BUDGETS:
                     matches = [
                         row for row in rows
@@ -269,33 +273,42 @@ def _write_accuracy_figure(rows: Sequence[Mapping[str, Any]], png_path: Path, pd
                     if len(matches) != 1:
                         raise ValueError(f"Missing metric for {variant}/{mode}/{budget}/{dataset_name}")
                     match = matches[0]
-                    accuracy = 100.0 * float(match["accuracy"])
-                    values.append(accuracy)
-                    lower.append(accuracy - 100.0 * float(match["wilson_ci_low"]))
-                    upper.append(100.0 * float(match["wilson_ci_high"]) - accuracy)
-                axis.errorbar(
-                    range(3),
-                    values,
-                    yerr=[lower, upper],
-                    marker="o",
-                    capsize=3,
-                    linewidth=1.8,
-                    color=colors[variant],
-                    label=("GSM8K-only" if variant == "gsm_only" else "GSM8K + MATH")
-                    if row_index == 0 and column_index == 0
-                    else None,
-                )
-            axis.set_xticks(range(3), [labels[budget] for budget in BUDGETS])
-            axis.grid(axis="y", alpha=0.25)
+                    values.append(float(match["accuracy"]))
+                    intervals.append(
+                        (float(match["wilson_ci_low"]), float(match["wilson_ci_high"]))
+                    )
+                series_values[variant_labels[variant]] = values
+                series_intervals[variant_labels[variant]] = intervals
+            plot_grouped_accuracy_bars(
+                axis,
+                x_labels=[labels[budget] for budget in BUDGETS],
+                series_values=series_values,
+                series_colors=colors,
+                series_intervals=series_intervals,
+                baseline_accuracy=float(base_rows[0]["accuracy"]),
+            )
+            axis.set_ylim(*y_limits[dataset_name])
             if row_index == 0:
                 axis.set_title(dataset_titles[dataset_name])
             if column_index == 0:
-                axis.set_ylabel(("Equal-example\n" if mode == "equal_example" else "Equal-token\n") + "Accuracy (%)")
-    handles, legend_labels = axes[0][0].get_legend_handles_labels()
+                axis.set_ylabel(
+                    ("Equal-example\n" if mode == "equal_example" else "Equal-token\n")
+                    + "Accuracy"
+                )
+    handles = [Patch(facecolor=colors[label], label=label) for label in variant_labels.values()]
+    handles.append(
+        Line2D(
+            [0],
+            [0],
+            color=BASELINE_COLOR,
+            linestyle=BASELINE_LINESTYLE,
+            linewidth=1.2,
+            label="Base student",
+        )
+    )
     figure.suptitle("Qwen2.5-7B length pilot: GSM8K-only versus MATH-mixed SFT", y=0.985)
     figure.legend(
-        handles,
-        legend_labels,
+        handles=handles,
         loc="upper center",
         bbox_to_anchor=(0.5, 0.95),
         ncol=3,

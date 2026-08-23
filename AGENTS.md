@@ -18,6 +18,7 @@
 ## Script and Workflow Conventions
 
 - Put reusable logic in `src/`, expose it through a small runnable script in `scripts/`, keep settings in `configs/`, write artifacts to `results/`, and place publication plots in `figures/` or the experiment's analysis artifact directory.
+- Before implementing a new utility or figure, search existing `src/`, `scripts/`, and figure-generation code for reusable logic and established visual conventions. Prefer extracting or extending shared code over creating a parallel implementation; document the reason when an intentional visual or implementation divergence is necessary.
 - Runnable scripts should do one clear job, expose explicit arguments and inputs/outputs, minimize hidden side effects, and log major settings.
 - Use phase-first lowercase names in the form `{phase}_{subphase}_{short_description}.py`; do not use numeric-only or vague `final_v2` names.
 - Avoid duplicating logic across scripts.

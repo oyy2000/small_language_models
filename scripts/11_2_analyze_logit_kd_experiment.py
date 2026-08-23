@@ -27,6 +27,7 @@ from length_budget_distill.logit_kd import (
     read_json,
     read_jsonl,
     resolve_project_path,
+    supervision_mode,
     write_json,
 )
 
@@ -86,7 +87,7 @@ def _paired_accuracy_bootstrap(kd: Mapping[str, bool], sft: Mapping[str, bool], 
     return paired_cluster_bootstrap(effects, samples=samples, seed=20260822)
 
 
-def _logit_metrics(snapshot_dir: Path, num_shards: int, method: str) -> Dict[str, Any]:
+def _logit_metrics(snapshot_dir: Path, num_shards: int, method: str, expected_records: int) -> Dict[str, Any]:
     import torch
     from safetensors.torch import load_file
 
@@ -133,7 +134,7 @@ def _logit_metrics(snapshot_dir: Path, num_shards: int, method: str) -> Dict[str
                 "metadata_sha256": file_sha256(metadata_path),
             }
         )
-    if record_indices != set(range(881)):
+    if record_indices != set(range(expected_records)):
         raise ValueError(f"Logit snapshot record coverage mismatch: {snapshot_dir}")
     metrics = {f"mean_{field}": total / token_count for field, total in weighted.items()}
     metrics.update({"completion_tokens": token_count, "records": len(record_indices), "shards": shard_evidence})
@@ -301,14 +302,21 @@ def main() -> None:
     logit_rows = []
     logit_evidence: Dict[str, Any] = {}
     for budget_name in protocol["budgets"]:
+        expected_records = int(protocol["budgets"][budget_name]["expected_records"])
         logit_evidence[budget_name] = {}
-        teacher_metrics = _logit_metrics(result_root / "formal" / "logits" / budget_name / "teacher", num_shards, "teacher")
+        teacher_metrics = _logit_metrics(
+            result_root / "formal" / "logits" / budget_name / "teacher",
+            num_shards,
+            "teacher",
+            expected_records,
+        )
         logit_evidence[budget_name]["teacher"] = teacher_metrics
         for method_dir, method_label in (("base", "Base"), ("sft", "SFT"), ("kd", "Logit KD")):
             metrics = _logit_metrics(
                 result_root / "formal" / "logits" / budget_name / method_dir,
                 num_shards,
                 method_dir,
+                expected_records,
             )
             logit_evidence[budget_name][method_dir] = metrics
             logit_rows.append(
@@ -350,6 +358,7 @@ def main() -> None:
         "scope": "GSM8K only",
         "protocol_hash": protocol_hash(protocol),
         "protocol_variant": protocol["protocol_variant"],
+        "supervision_mode": supervision_mode(protocol),
         "method": "online exact logit-level KD with completion-only hard CE plus forward KL",
         "selected_alpha": alpha,
         "selected_temperature": temperature,
@@ -374,6 +383,8 @@ def main() -> None:
         "# 7B-to-1.5B Logit Distillation Experiment",
         "",
         "This is a revised single-seed GSM8K protocol and does not estimate training-seed variability.",
+        "",
+        f"Training supervision mode: {supervision_mode(protocol)}.",
         "",
         f"Selected shared hyperparameters: alpha={alpha:g}, temperature={temperature:g}.",
         "",

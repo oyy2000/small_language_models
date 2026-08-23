@@ -18,6 +18,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from length_budget_distill.factorial import validated_adapter_evidence
 from length_budget_distill.logit_kd import (
+    baseline_sft_run_name,
     file_sha256,
     load_and_validate_tokenizers,
     load_protocol,
@@ -142,7 +143,7 @@ def main() -> None:
         adapter = validated_adapter_evidence(adapter_path)
         if adapter is None:
             raise ValueError(f"Parent SFT adapter is incomplete: {adapter_path}")
-        run_name = f"equal_example__qwen2p5_7b__{budget_name}__seed_17"
+        run_name = baseline_sft_run_name(protocol, budget_name)
         expected_runs.add(run_name)
         if run_name not in evaluation_evidence:
             raise ValueError(f"Parent SFT evaluation is missing: {run_name}")

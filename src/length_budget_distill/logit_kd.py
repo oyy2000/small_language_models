@@ -77,7 +77,39 @@ def load_protocol(path: str | Path) -> Dict[str, Any]:
         raise ValueError("The registered KD protocol is restricted to seed 17.")
     if not bool(protocol["kd"].get("completion_only")):
         raise ValueError("The registered KD protocol requires completion-only loss.")
+    mode = supervision_mode(protocol)
+    if mode not in {"equal_example", "equal_token"}:
+        raise ValueError(f"Unsupported KD supervision mode: {mode}")
+    if mode == "equal_token":
+        supervision = protocol.get("supervision", {})
+        expected_totals = []
+        for budget_name, budget in protocol["budgets"].items():
+            if "expected_solution_tokens" not in budget:
+                raise ValueError(
+                    f"Equal-token KD budget is missing expected_solution_tokens: {budget_name}"
+                )
+            expected_totals.append(int(budget["expected_solution_tokens"]))
+        max_gap = int(supervision.get("max_cross_budget_solution_token_gap", -1))
+        if max_gap < 0:
+            raise ValueError("Equal-token KD requires a non-negative cross-budget token-gap bound.")
+        if max(expected_totals) - min(expected_totals) > max_gap:
+            raise ValueError("Registered equal-token totals exceed the cross-budget token-gap bound.")
     return protocol
+
+
+def supervision_mode(protocol: Mapping[str, Any]) -> str:
+    """Return the registered supervision mode, preserving v1 equal-example compatibility."""
+
+    supervision = protocol.get("supervision", {})
+    if not isinstance(supervision, Mapping):
+        raise ValueError("KD supervision must be a JSON object.")
+    return str(supervision.get("mode", "equal_example"))
+
+
+def baseline_sft_run_name(protocol: Mapping[str, Any], budget_name: str) -> str:
+    if budget_name not in protocol["budgets"]:
+        raise ValueError(f"Unknown budget: {budget_name}")
+    return f"{supervision_mode(protocol)}__qwen2p5_7b__{budget_name}__seed_17"
 
 
 def protocol_hash(protocol: Mapping[str, Any]) -> str:
@@ -111,6 +143,7 @@ def validate_budget_dataset(protocol: Mapping[str, Any], budget_name: str) -> Tu
             f"KD training-data count mismatch for {budget_name}: expected={budget['expected_records']} actual={len(rows)}"
         )
     seen = set()
+    solution_token_total = 0
     for row in rows:
         record_id = str(row.get("id"))
         if not record_id or record_id in seen:
@@ -123,6 +156,17 @@ def validate_budget_dataset(protocol: Mapping[str, Any], budget_name: str) -> Tu
             raise ValueError(f"KD record does not come from the registered 7B teacher: {record_id}")
         if not bool(metadata.get("is_correct")) or not bool(metadata.get("budget_compliant")):
             raise ValueError(f"KD record is not verified-correct and budget-compliant: {record_id}")
+        try:
+            solution_token_total += int(metadata["solution_token_count"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"KD record has invalid solution_token_count: {record_id}") from exc
+    if "expected_solution_tokens" in budget:
+        expected_tokens = int(budget["expected_solution_tokens"])
+        if solution_token_total != expected_tokens:
+            raise ValueError(
+                f"KD solution-token total mismatch for {budget_name}: "
+                f"expected={expected_tokens} actual={solution_token_total}"
+            )
     return path, rows
 
 

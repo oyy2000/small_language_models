@@ -15,11 +15,13 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from length_budget_distill.logit_kd import (
+    baseline_sft_run_name,
     float_slug,
     hybrid_kd_loss,
     invalid_vocab_probability_mass,
     kd_run_name,
     load_protocol,
+    supervision_mode,
     tokenize_completion_record,
 )
 
@@ -44,6 +46,25 @@ class LogitKDTest(unittest.TestCase):
         self.assertEqual(config["training"]["seed"], 17)
         self.assertEqual(config["models"]["tokenizer"]["expected_length"], 151665)
         self.assertEqual(config["kd"]["top_k"], 64)
+        self.assertEqual(supervision_mode(config), "equal_example")
+        self.assertEqual(
+            baseline_sft_run_name(config, "short_128"),
+            "equal_example__qwen2p5_7b__short_128__seed_17",
+        )
+
+    def test_equal_token_protocol_registers_variable_record_counts(self) -> None:
+        config = load_protocol(
+            PROJECT_ROOT / "configs/capacity_length_logit_kd_equal_token_seed17_v1.json"
+        )
+        self.assertEqual(supervision_mode(config), "equal_token")
+        self.assertEqual(
+            [config["budgets"][name]["expected_records"] for name in config["budgets"]],
+            [881, 381, 179],
+        )
+        self.assertEqual(
+            baseline_sft_run_name(config, "long_512"),
+            "equal_token__qwen2p5_7b__long_512__seed_17",
+        )
 
     def test_float_and_run_slugs_are_stable(self) -> None:
         self.assertEqual(float_slug(0.25), "0p25")

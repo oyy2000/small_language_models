@@ -1,0 +1,121 @@
+{
+  "experiment_name": "capacity_length_logit_kd_equal_token_seed17_v1",
+  "protocol_variant": "formal_single_seed_logit_kd_equal_supervision_token",
+  "scope": "GSM8K only",
+  "supervision": {
+    "mode": "equal_token",
+    "token_count_definition": "sum(metadata.solution_token_count)",
+    "target_solution_tokens": 31443,
+    "max_cross_budget_solution_token_gap": 64,
+    "subset_seed": 17
+  },
+  "parent": {
+    "config_path": "configs/capacity_length_factorial_v1.json",
+    "config_file_sha256": "ae53ed7d73c5d73d88b0535f8f0cc310e7690c71d39c16162e7f365ddbe02d33",
+    "config_canonical_sha256": "901fd9c31edcd77ab357b03f5e1cbb8cd0c92be3db31f9cec98bd70d166edcdc",
+    "run_config_path": "configs/capacity_length_factorial_run_seed17_v1.json",
+    "run_config_sha256": "7333077dc791a79370e2593ef46a332b79197d736df032b09ff7daf00ae3a1a4",
+    "result_root": "results/capacity_length_factorial_seed17_v1/formal",
+    "checkpoint_root": "checkpoints/capacity_length_factorial_seed17_v1/formal",
+    "completion_marker": "results/capacity_length_factorial_seed17_v1/formal/FORMAL_COMPLETE"
+  },
+  "models": {
+    "teacher": {
+      "model_name": "Qwen/Qwen2.5-7B-Instruct",
+      "revision": "a09a35458c702b33eeacc393d103063234e8bc28",
+      "torch_dtype": "bfloat16"
+    },
+    "student": {
+      "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+      "revision": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+      "torch_dtype": "bfloat16",
+      "use_lora": true,
+      "lora": {
+        "r": 4,
+        "alpha": 16,
+        "dropout": 0.05,
+        "target_modules": "all-linear"
+      }
+    },
+    "tokenizer": {
+      "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+      "revision": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+      "expected_length": 151665,
+      "expected_tokenizer_json_sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539"
+    }
+  },
+  "budgets": {
+    "short_128": {
+      "max_solution_tokens": 128,
+      "train_path": "results/capacity_length_factorial_seed17_v1/formal/sft_data/equal_token/qwen2p5_7b__short_128__seed_17.jsonl",
+      "train_sha256": "4328598f49f1d60ba75ae8cd3209675e198f95dc96b851001b71369956722bba",
+      "expected_records": 881,
+      "expected_solution_tokens": 31443,
+      "baseline_adapter": "checkpoints/capacity_length_factorial_seed17_v1/formal/equal_token__qwen2p5_7b__short_128__seed_17",
+      "baseline_prediction": "results/capacity_length_factorial_seed17_v1/formal/eval/predictions/equal_token__qwen2p5_7b__short_128__seed_17.jsonl"
+    },
+    "medium_256": {
+      "max_solution_tokens": 256,
+      "train_path": "results/capacity_length_factorial_seed17_v1/formal/sft_data/equal_token/qwen2p5_7b__medium_256__seed_17.jsonl",
+      "train_sha256": "3ad9feb8e00979f922c5daeea53ee09b94af4afe6f47e2999af4d99943b8c5fa",
+      "expected_records": 381,
+      "expected_solution_tokens": 31442,
+      "baseline_adapter": "checkpoints/capacity_length_factorial_seed17_v1/formal/equal_token__qwen2p5_7b__medium_256__seed_17",
+      "baseline_prediction": "results/capacity_length_factorial_seed17_v1/formal/eval/predictions/equal_token__qwen2p5_7b__medium_256__seed_17.jsonl"
+    },
+    "long_512": {
+      "max_solution_tokens": 512,
+      "train_path": "results/capacity_length_factorial_seed17_v1/formal/sft_data/equal_token/qwen2p5_7b__long_512__seed_17.jsonl",
+      "train_sha256": "ed094126b4cb7d574baed1f08b2c2afa044fe4ee839c65852136f2f687eb6fbc",
+      "expected_records": 179,
+      "expected_solution_tokens": 31407,
+      "baseline_adapter": "checkpoints/capacity_length_factorial_seed17_v1/formal/equal_token__qwen2p5_7b__long_512__seed_17",
+      "baseline_prediction": "results/capacity_length_factorial_seed17_v1/formal/eval/predictions/equal_token__qwen2p5_7b__long_512__seed_17.jsonl"
+    }
+  },
+  "kd": {
+    "alpha_grid": [0.25, 0.5, 0.75],
+    "temperature_grid": [1.0, 2.0, 4.0],
+    "top_k": 64,
+    "loss_direction": "teacher_to_student_forward_kl",
+    "completion_only": true,
+    "shared_hyperparameters_across_budgets": true
+  },
+  "training": {
+    "seed": 17,
+    "num_train_epochs": 1,
+    "per_device_train_batch_size": 1,
+    "gradient_accumulation_steps": 4,
+    "learning_rate": 0.00002,
+    "warmup_ratio": 0.03,
+    "max_length": 2048,
+    "gradient_checkpointing": true,
+    "max_grad_norm": 1.0,
+    "report_every_optimizer_steps": 10
+  },
+  "validation": {
+    "dataset_split": "train",
+    "start_index": 2000,
+    "limit": 500,
+    "max_new_tokens": 512,
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "batch_size": 32
+  },
+  "formal": {
+    "dataset_split": "test",
+    "start_index": 50,
+    "limit": 1269,
+    "max_new_tokens": 512,
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "batch_size": 32,
+    "bootstrap_samples": 10000,
+    "familywise_alpha": 0.05
+  },
+  "outputs": {
+    "result_root": "results/capacity_length_logit_kd_equal_token_seed17_v1",
+    "checkpoint_root": "checkpoints/capacity_length_logit_kd_equal_token_seed17_v1",
+    "logit_shards_per_snapshot": 8
+  }
+}

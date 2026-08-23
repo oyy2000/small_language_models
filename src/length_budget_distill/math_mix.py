@@ -6,7 +6,7 @@ import hashlib
 import json
 import math
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
 
@@ -129,3 +129,78 @@ def count_by_fields(rows: Iterable[Mapping[str, Any]], fields: Sequence[str]) ->
         {**{field: key[index] for index, field in enumerate(fields)}, "count": counts[key]}
         for key in sorted(counts)
     ]
+
+
+def summarize_math_cohort(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Summarize subject and difficulty coverage for a MATH-style cohort."""
+    if not rows:
+        raise ValueError("Cannot summarize an empty MATH cohort")
+    levels = [parse_math_level(row["level"]) for row in rows]
+    level_counts = Counter(levels)
+    subject_counts = Counter(
+        str(row["subject"]).lower().replace(" & ", "_and_").replace(" ", "_")
+        for row in rows
+    )
+    return {
+        "n": len(rows),
+        "mean_level": sum(levels) / len(levels),
+        "level_counts": [
+            {"level": level, "count": level_counts[level]}
+            for level in sorted(level_counts)
+        ],
+        "subject_counts": [
+            {"subject": subject, "count": subject_counts[subject]}
+            for subject in sorted(subject_counts)
+        ],
+    }
+
+
+def diagnose_common_support_selection(
+    source_rows: Sequence[Mapping[str, Any]],
+    common_problem_ids: Sequence[str],
+    evaluation_rows: Sequence[Mapping[str, Any]],
+) -> Dict[str, Any]:
+    """Measure coverage shift introduced by a common-problem intersection."""
+    source_by_id = {str(row["id"]): row for row in source_rows}
+    if len(source_by_id) != len(source_rows):
+        raise ValueError("Source cohort has duplicate IDs")
+    common_ids = [str(problem_id) for problem_id in common_problem_ids]
+    if len(common_ids) != len(set(common_ids)):
+        raise ValueError("Common-support problem IDs contain duplicates")
+    missing_ids = set(common_ids) - set(source_by_id)
+    if missing_ids:
+        raise ValueError(f"Common-support IDs are absent from source: {sorted(missing_ids)[:5]}")
+    common_rows = [source_by_id[problem_id] for problem_id in common_ids]
+
+    source_level_counts = Counter(parse_math_level(row["level"]) for row in source_rows)
+    common_level_counts = Counter(parse_math_level(row["level"]) for row in common_rows)
+    source_subject_counts = Counter(str(row["subject"]) for row in source_rows)
+    common_subject_counts = Counter(str(row["subject"]) for row in common_rows)
+
+    def retention_rows(source_counts: Counter[Any], selected_counts: Counter[Any], field: str) -> List[Dict[str, Any]]:
+        return [
+            {
+                field: key,
+                "source_count": source_counts[key],
+                "common_count": selected_counts[key],
+                "retention_rate": selected_counts[key] / source_counts[key],
+            }
+            for key in sorted(source_counts)
+        ]
+
+    source_hashes = {str(row["question_sha256"]) for row in source_rows}
+    common_hashes = {str(row["question_sha256"]) for row in common_rows}
+    evaluation_hashes = {str(row["question_sha256"]) for row in evaluation_rows}
+    return {
+        "source": summarize_math_cohort(source_rows),
+        "common_support": summarize_math_cohort(common_rows),
+        "evaluation": summarize_math_cohort(evaluation_rows),
+        "retention_by_level": retention_rows(source_level_counts, common_level_counts, "level"),
+        "retention_by_subject": retention_rows(
+            source_subject_counts, common_subject_counts, "subject"
+        ),
+        "question_hash_overlap": {
+            "source_vs_evaluation": len(source_hashes & evaluation_hashes),
+            "common_support_vs_evaluation": len(common_hashes & evaluation_hashes),
+        },
+    }

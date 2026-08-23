@@ -6,7 +6,7 @@ import csv
 import logging
 import math
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping, Sequence
 
 
 MODES = ("equal_example", "equal_token")
@@ -18,6 +18,83 @@ MODE_COLORS = {
     "equal_example": "#0072B2",
     "equal_token": "#D55E00",
 }
+COMPARISON_COLORS = (MODE_COLORS["equal_example"], MODE_COLORS["equal_token"])
+BASELINE_COLOR = "#555555"
+BASELINE_LINESTYLE = (0, (4, 3))
+
+
+def plot_grouped_accuracy_bars(
+    axis: Any,
+    *,
+    x_labels: Sequence[str],
+    series_values: Mapping[str, Sequence[float]],
+    series_colors: Mapping[str, str],
+    series_intervals: Mapping[str, Sequence[tuple[float, float]]] | None = None,
+    baseline_accuracy: float | None = None,
+    show_value_labels: bool = True,
+) -> None:
+    """Draw the shared paired-comparison bar style using proportion-scale values."""
+    import numpy as np
+    from matplotlib.ticker import PercentFormatter
+
+    series_names = list(series_values)
+    if not series_names:
+        raise ValueError("At least one accuracy series is required")
+    if set(series_colors) != set(series_names):
+        raise ValueError("series_colors must have exactly the same keys as series_values")
+    if series_intervals is not None and set(series_intervals) != set(series_names):
+        raise ValueError("series_intervals must have exactly the same keys as series_values")
+
+    x = np.arange(len(x_labels), dtype=float)
+    width = min(0.36, 0.80 / len(series_names))
+    for series_index, series_name in enumerate(series_names):
+        values = [float(value) for value in series_values[series_name]]
+        if len(values) != len(x_labels):
+            raise ValueError(f"Series {series_name!r} does not match x_labels")
+        yerr = None
+        if series_intervals is not None:
+            intervals = list(series_intervals[series_name])
+            if len(intervals) != len(values):
+                raise ValueError(f"Intervals for {series_name!r} do not match its values")
+            yerr = [
+                [value - float(interval[0]) for value, interval in zip(values, intervals)],
+                [float(interval[1]) - value for value, interval in zip(values, intervals)],
+            ]
+            if any(error < 0.0 for side in yerr for error in side):
+                raise ValueError(f"Intervals for {series_name!r} do not contain their values")
+        offset = (series_index - (len(series_names) - 1) / 2.0) * width
+        bars = axis.bar(
+            x + offset,
+            values,
+            width=width,
+            color=series_colors[series_name],
+            edgecolor="white",
+            linewidth=0.7,
+            yerr=yerr,
+            capsize=3 if yerr is not None else 0,
+            error_kw={"elinewidth": 1.2, "capthick": 1.2},
+            label=series_name,
+            zorder=3,
+        )
+        if show_value_labels:
+            axis.bar_label(
+                bars,
+                labels=[f"{value * 100:.1f}" for value in values],
+                padding=2,
+                fontsize=8.5,
+            )
+    if baseline_accuracy is not None:
+        axis.axhline(
+            float(baseline_accuracy),
+            color=BASELINE_COLOR,
+            linestyle=BASELINE_LINESTYLE,
+            linewidth=1.2,
+            zorder=2,
+        )
+    axis.set_xticks(x, x_labels)
+    axis.grid(axis="y", color="#D9D9D9", linewidth=0.8, alpha=0.8, zorder=0)
+    axis.set_axisbelow(True)
+    axis.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
 
 
 def read_metrics(path: Path, seed: int | None) -> tuple[list[dict[str, Any]], dict[str, Any], int]:
@@ -119,7 +196,6 @@ def plot_accuracy(
     import numpy as np
     from matplotlib.lines import Line2D
     from matplotlib.patches import Patch
-    from matplotlib.ticker import PercentFormatter
 
     generators = sorted(
         {(row["generator_name"], row["generator_size_b"]) for row in rows},
@@ -144,45 +220,26 @@ def plot_accuracy(
     nrows = math.ceil(len(generators) / ncols)
     fig, axes = plt.subplots(nrows, ncols, figsize=(11.5, 7.6), sharex=True, sharey=True)
     axes_flat = np.atleast_1d(axes).ravel()
-    x = np.arange(len(budgets), dtype=float)
-    width = 0.36
 
     for axis, (generator_name, size_b) in zip(axes_flat, generators):
-        for mode, offset in zip(MODES, (-width / 2, width / 2)):
-            values = [lookup[(mode, generator_name, budget)] for budget in budgets]
-            bars = axis.bar(
-                x + offset,
-                values,
-                width=width,
-                color=MODE_COLORS[mode],
-                edgecolor="white",
-                linewidth=0.7,
-                label=MODE_LABELS[mode],
-                zorder=3,
-            )
-            axis.bar_label(
-                bars,
-                labels=[f"{value * 100:.1f}" for value in values],
-                padding=2,
-                fontsize=8.5,
-            )
-        axis.axhline(
-            base_row["accuracy"],
-            color="#555555",
-            linestyle=(0, (4, 3)),
-            linewidth=1.2,
-            zorder=2,
+        plot_grouped_accuracy_bars(
+            axis,
+            x_labels=[str(budget) for budget in budgets],
+            series_values={
+                MODE_LABELS[mode]: [
+                    lookup[(mode, generator_name, budget)] for budget in budgets
+                ]
+                for mode in MODES
+            },
+            series_colors={MODE_LABELS[mode]: MODE_COLORS[mode] for mode in MODES},
+            baseline_accuracy=base_row["accuracy"],
         )
         axis.set_title(_generator_label(size_b))
-        axis.set_xticks(x, [str(budget) for budget in budgets])
-        axis.grid(axis="y", color="#D9D9D9", linewidth=0.8, alpha=0.8, zorder=0)
-        axis.set_axisbelow(True)
 
     for axis in axes_flat[len(generators) :]:
         axis.set_visible(False)
     for axis in axes_flat:
         axis.set_ylim(0.0, 0.80)
-        axis.yaxis.set_major_formatter(PercentFormatter(xmax=1.0, decimals=0))
     for axis in axes_flat[-ncols:]:
         if axis.get_visible():
             axis.set_xlabel("Teacher solution budget (tokens)")
@@ -196,8 +253,8 @@ def plot_accuracy(
         Line2D(
             [0],
             [0],
-            color="#555555",
-            linestyle=(0, (4, 3)),
+            color=BASELINE_COLOR,
+            linestyle=BASELINE_LINESTYLE,
             linewidth=1.2,
             label=f"Base student ({base_row['accuracy'] * 100:.1f}%)",
         )

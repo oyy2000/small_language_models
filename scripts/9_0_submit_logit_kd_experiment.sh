@@ -6,8 +6,12 @@ cd "$(dirname "$0")/.."
 
 CONFIG="${CONFIG:-configs/capacity_length_logit_kd_seed17_v1.json}"
 DRY_RUN="${DRY_RUN:-0}"
-nodes=(c32 c49)
-partitions=(a5000ada a5000ada)
+IFS=',' read -r -a nodes <<< "${KD_NODES:-c32,c49}"
+IFS=',' read -r -a partitions <<< "${KD_PARTITIONS:-a5000ada,a5000ada}"
+if [ "${#nodes[@]}" -eq 0 ] || [ "${#nodes[@]}" -ne "${#partitions[@]}" ]; then
+  echo "KD_NODES and KD_PARTITIONS must contain the same non-zero number of comma-separated entries." >&2
+  exit 2
+fi
 launcher_shards="${#nodes[@]}"
 
 if [ "${DRY_RUN}" = "1" ]; then
