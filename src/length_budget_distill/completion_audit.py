@@ -88,11 +88,17 @@ def audit_capacity_length_completion(
 
     dataset_path = root / "sft_data" / "dataset_manifest.json"
     dataset = _load_json(dataset_path, errors)
-    expected_training_runs = expected_conditions_count * len(normalized_config["balancing"]["training_seeds"]) * 2 + 6
     dataset_runs = {str(run.get("run_name")): run for run in dataset.get("runs", [])}
+    configured_seeds = [int(seed) for seed in normalized_config["balancing"]["training_seeds"]]
+    active_seeds = [int(seed) for seed in dataset.get("training_seeds", [])]
+    _expect(bool(active_seeds), "dataset manifest has no active training seeds", errors)
+    _expect(len(active_seeds) == len(set(active_seeds)), "dataset training seeds are not unique", errors)
+    _expect(set(active_seeds) <= set(configured_seeds), "dataset training seeds exceed parent protocol", errors)
+    expected_training_runs = expected_conditions_count * len(active_seeds) * 2 + 2 * len(active_seeds)
     _expect(dataset.get("status") == "complete", "dataset manifest is not complete", errors)
     _expect(dataset.get("stage") == stage, "dataset stage mismatch", errors)
     _expect(dataset.get("config_hash") == config_hash, "dataset config hash mismatch", errors)
+    _verify_run_config(dataset, config_hash, active_seeds, project, errors)
     _expect(len(dataset_runs) == expected_training_runs, "dataset run cardinality mismatch", errors)
     _expect(
         int(dataset.get("expected_run_count", -1)) == expected_training_runs,
@@ -105,6 +111,7 @@ def audit_capacity_length_completion(
             errors.append(f"SFT data evidence mismatch: {run_name}")
     _verify_marker(root / "sft_data" / "DATASETS_COMPLETE", dataset_path, config_hash, errors)
     counts["training_runs_expected"] = expected_training_runs
+    counts["training_seeds"] = len(active_seeds)
 
     training_runs: Dict[str, Dict[str, Any]] = {}
     training_manifest_paths = sorted((root / "training").glob("training_manifest_shard_*_of_*.json"))
@@ -180,7 +187,12 @@ def audit_capacity_length_completion(
     _expect(analysis.get("config_hash") == config_hash, "analysis config hash mismatch", errors)
     _expect(int(analysis.get("run_count", -1)) == expected_eval_runs, "analysis run count mismatch", errors)
     conclusion = analysis.get("conclusion", {})
-    expected_level = "pipeline_smoke_only" if stage == "smoke" else "registered_formal"
+    if stage == "smoke":
+        expected_level = "pipeline_smoke_only"
+    elif active_seeds == configured_seeds:
+        expected_level = "registered_formal"
+    else:
+        expected_level = "revised_formal_single_seed" if len(active_seeds) == 1 else "revised_formal_seed_subset"
     _expect(conclusion.get("evidence_level") == expected_level, "analysis evidence-level mismatch", errors)
     if stage == "smoke":
         _expect(
@@ -270,3 +282,27 @@ def _verify_marker(marker_path: Path, manifest_path: Path, config_hash: str, err
     manifest_field = "manifest_sha256" if "manifest_sha256" in marker else "artifact_manifest_sha256"
     if marker.get(manifest_field) != file_sha256(manifest_path):
         errors.append(f"completion marker manifest hash mismatch: {marker_path}")
+
+
+def _verify_run_config(
+    dataset: Mapping[str, Any],
+    config_hash: str,
+    active_seeds: list[int],
+    project_root: Path,
+    errors: list[str],
+) -> None:
+    evidence = dataset.get("run_config")
+    if evidence is None:
+        return
+    if not isinstance(evidence, Mapping):
+        errors.append("dataset run_config evidence is invalid")
+        return
+    path = _resolve(project_root, evidence.get("path"))
+    if not path.is_file() or evidence.get("sha256") != file_sha256(path):
+        errors.append(f"run-config evidence mismatch: {path}")
+        return
+    payload = _load_json(path, errors)
+    if payload.get("parent_config_sha256") != config_hash:
+        errors.append("run-config parent hash mismatch")
+    if [int(seed) for seed in payload.get("training_seeds", [])] != active_seeds:
+        errors.append("run-config training seeds mismatch")

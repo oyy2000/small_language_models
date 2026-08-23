@@ -37,6 +37,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="configs/capacity_length_factorial_v1.json")
     parser.add_argument("--eval-manifest-glob", required=True)
+    parser.add_argument("--dataset-manifest", default=None)
     parser.add_argument("--selected-traces", required=True)
     parser.add_argument("--selection-audit", required=True)
     parser.add_argument("--output-dir", required=True)
@@ -55,6 +56,12 @@ def main() -> None:
     generators = {item["name"]: item for item in config["generators"]}
     budget_tokens = {item["name"]: int(item["max_solution_tokens"]) for item in config["length_budgets"]}
     conditions = expected_conditions(config)
+    configured_seeds = [int(seed) for seed in config["balancing"]["training_seeds"]]
+    active_seeds, protocol_variant, dataset_manifest_evidence = _resolve_active_seeds(
+        args.dataset_manifest,
+        config_hash=config_hash,
+        configured_seeds=configured_seeds,
+    )
     selection_audit = _read_json(Path(args.selection_audit))
     if selection_audit.get("status") != "passed" or selection_audit.get("config_hash") != config_hash:
         raise ValueError(f"Selection audit is incomplete or mismatched: {args.selection_audit}")
@@ -143,7 +150,7 @@ def main() -> None:
         (mode, generator_name, budget_name, seed)
         for mode in ("equal_example", "equal_token")
         for generator_name, budget_name in conditions
-        for seed in config["balancing"]["training_seeds"]
+        for seed in active_seeds
     }
     missing_keys = sorted(expected_factorial_keys - set(prediction_maps))
     if missing_keys:
@@ -161,7 +168,14 @@ def main() -> None:
         row["holm_p_value"] = adjusted_p
 
     regression = _fit_clustered_logistic_models(regression_rows)
-    conclusion = _classify_result(contrasts, regression, stage=args.stage)
+    conclusion = _classify_result(
+        contrasts,
+        regression,
+        stage=args.stage,
+        protocol_variant=protocol_variant,
+        active_seeds=active_seeds,
+        configured_seeds=configured_seeds,
+    )
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     analysis_path = output_dir / "capacity_length_analysis.json"
@@ -177,6 +191,8 @@ def main() -> None:
             "scope": "GSM8K only",
             "method": "offline black-box sequence-level response distillation implemented with SFT",
             "run_count": len(run_rows),
+            "protocol_variant": protocol_variant,
+            "training_seeds": active_seeds,
             "contrasts": contrasts,
             "regression": regression,
             "conclusion": conclusion,
@@ -187,6 +203,7 @@ def main() -> None:
                 "selected_traces_sha256": file_sha256(args.selected_traces),
                 "selection_audit_path": args.selection_audit,
                 "selection_audit_sha256": file_sha256(args.selection_audit),
+                "dataset_manifest": dataset_manifest_evidence,
                 "eval_manifests": [
                     {"path": str(path), "sha256": file_sha256(path)} for path in eval_manifests
                 ],
@@ -364,6 +381,9 @@ def _classify_result(
     contrasts: List[Dict[str, Any]],
     regression: Dict[str, Any],
     stage: str,
+    protocol_variant: str,
+    active_seeds: List[int],
+    configured_seeds: List[int],
 ) -> Dict[str, Any]:
     primary = [row for row in contrasts if row["mode"] == "equal_example"]
     interaction_p = float(regression["equal_example"]["interaction_p_value"])
@@ -386,14 +406,47 @@ def _classify_result(
     else:
         statistical_pattern = "inconclusive"
     classification = statistical_pattern if stage == "formal" else "smoke_only_no_scientific_conclusion"
-    return {
+    if stage == "formal" and active_seeds != configured_seeds:
+        evidence_level = "revised_formal_single_seed" if len(active_seeds) == 1 else "revised_formal_seed_subset"
+    else:
+        evidence_level = "registered_formal" if stage == "formal" else "pipeline_smoke_only"
+    result = {
         "classification": classification,
         "statistical_pattern": statistical_pattern,
-        "evidence_level": "registered_formal" if stage == "formal" else "pipeline_smoke_only",
+        "evidence_level": evidence_level,
+        "protocol_variant": protocol_variant,
+        "training_seeds": active_seeds,
         "interaction_p_value": interaction_p,
         "scope": "GSM8K only",
         "robustness_required": "Compare direction and confidence intervals with equal_token results.",
     }
+    if active_seeds != configured_seeds:
+        result["limitation"] = "Training-seed variability is not estimated by this reduced run."
+    return result
+
+
+def _resolve_active_seeds(
+    dataset_manifest_path: str | None,
+    *,
+    config_hash: str,
+    configured_seeds: List[int],
+) -> tuple[List[int], str, Dict[str, Any] | None]:
+    if dataset_manifest_path is None:
+        return configured_seeds, "registered_parent_protocol", None
+    path = Path(dataset_manifest_path)
+    manifest = _read_json(path)
+    if manifest.get("status") != "complete" or manifest.get("config_hash") != config_hash:
+        raise ValueError(f"Dataset manifest is incomplete or mismatched: {path}")
+    seeds = [int(seed) for seed in manifest.get("training_seeds", [])]
+    if not seeds or len(seeds) != len(set(seeds)):
+        raise ValueError("Dataset manifest must contain unique active training seeds.")
+    if not set(seeds) <= set(configured_seeds):
+        raise ValueError("Dataset manifest contains seeds outside the parent protocol.")
+    return (
+        seeds,
+        str(manifest.get("protocol_variant", "registered_parent_protocol")),
+        {"path": str(path), "sha256": file_sha256(path)},
+    )
 
 
 def _trace_summary(

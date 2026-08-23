@@ -59,3 +59,4 @@
 - Primary training is equal-example on the 12-condition common problem intersection. Equal-supervision-token training is a robustness analysis.
 - A factorial adapter is complete only when its marker verifies the training-data hash, run-config hash, training and launcher source hashes, and both final LoRA file hashes.
 - Use the parent-hash-bound `configs/capacity_length_factorial_eval_v1.json` overlay for batched greedy evaluation; do not silently change the locked split or decoding parameters.
+- Preserve the original three-seed `capacity_length_factorial_v1` artifacts as historical evidence. The user-approved reduced rerun uses only seed 17 through `configs/capacity_length_factorial_run_seed17_v1.json`, reuses the immutable parent teacher traces, writes to a separate `capacity_length_factorial_seed17_v1` result/checkpoint root, and must be labeled as a revised single-seed protocol that does not estimate training-seed variability.

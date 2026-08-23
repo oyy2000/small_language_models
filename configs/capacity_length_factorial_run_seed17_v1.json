@@ -1,0 +1,6 @@
+{
+  "parent_config_sha256": "901fd9c31edcd77ab357b03f5e1cbb8cd0c92be3db31f9cec98bd70d166edcdc",
+  "protocol_variant": "formal_single_seed_reduced",
+  "training_seeds": [17],
+  "rationale": "User-approved reduced formal run using one deterministic training seed while preserving the immutable three-seed parent generation and selection protocol."
+}

@@ -11,6 +11,7 @@ transformers>=4.48.3
 accelerate>=1.2.1
 trl>=0.9.6
 peft>=0.12.0
+safetensors>=0.4.5
 
 # Analysis figures.
 matplotlib>=3.10.8

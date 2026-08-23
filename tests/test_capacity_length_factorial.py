@@ -17,6 +17,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from length_budget_distill.backends import GenerationRequest, LocalRuleTeacherBackend
 from length_budget_distill.factorial import (
+    canonical_sha256,
     common_problem_ids,
     deterministic_equal_token_subset,
     file_sha256,
@@ -297,6 +298,46 @@ class CapacityLengthFactorialTest(unittest.TestCase):
             self.assertEqual(manifest["expected_run_count"], 2 * 3 * 2 + 2 * 3)
             self.assertTrue(all(run.get("train_sha256") for run in manifest["runs"]))
             self.assertTrue((sft_dir / "DATASETS_COMPLETE").is_file())
+
+            run_config_path = root / "run_seed17.json"
+            run_config_path.write_text(
+                json.dumps(
+                    {
+                        "parent_config_sha256": canonical_sha256(config),
+                        "protocol_variant": "formal_single_seed_reduced",
+                        "training_seeds": [17],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            reduced_sft_dir = root / "sft_seed17"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "scripts" / "5_3_build_capacity_length_sft_data.py"),
+                    "--config",
+                    str(config_path),
+                    "--run-config",
+                    str(run_config_path),
+                    "--selected-traces",
+                    str(selected_dir / "selected_traces.jsonl"),
+                    "--output-dir",
+                    str(reduced_sft_dir),
+                    "--stage",
+                    "smoke",
+                ],
+                cwd=PROJECT_ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            reduced_manifest = json.loads(
+                (reduced_sft_dir / "dataset_manifest.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(reduced_manifest["training_seeds"], [17])
+            self.assertEqual(reduced_manifest["expected_run_count"], 2 * 1 * 2 + 2 * 1)
+            self.assertEqual(reduced_manifest["protocol_variant"], "formal_single_seed_reduced")
+            self.assertEqual(reduced_manifest["run_config"]["sha256"], file_sha256(run_config_path))
 
 
 if __name__ == "__main__":

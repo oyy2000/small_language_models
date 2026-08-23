@@ -32,6 +32,14 @@ STAGE=formal UPSTREAM_JOB_ID=<merge_job_id> \
   bash scripts/6_0_submit_capacity_length_train_eval.sh
 ```
 
+For the user-approved seed-17 reduced rerun, build a separate dataset manifest
+from the immutable selected traces with
+`configs/capacity_length_factorial_run_seed17_v1.json`, then launch with
+`OUTPUT_ROOT=results/capacity_length_factorial_seed17_v1` and
+`CHECKPOINT_ROOT=checkpoints/capacity_length_factorial_seed17_v1/formal`.
+This variant trains 26 adapters and evaluates the base model plus those 26
+adapters; it is not a three-seed variability estimate.
+
 Seal a completed stage only after the independent evidence audit passes:
 
 ```bash

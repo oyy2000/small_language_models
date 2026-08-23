@@ -95,6 +95,17 @@ Planned paired contrasts use problem-cluster bootstrap confidence intervals and
 Holm correction. Equal-token results are a required robustness check for the
 equal-example conclusion.
 
+### Reduced single-seed rerun
+
+The original `capacity_length_factorial_v1` protocol and its partial three-seed
+artifacts remain immutable. A user-approved reduced rerun selects seed 17 with
+`configs/capacity_length_factorial_run_seed17_v1.json`. It reuses the
+parent-hash-verified teacher traces and selection audit, then builds a separate
+26-run training manifest: 12 equal-example adapters, 12 equal-token adapters,
+and two calibration adapters. Evaluation contains the base student plus those
+26 adapters. Results from this variant are labeled
+`revised_formal_single_seed`; they do not estimate training-seed variability.
+
 Teacher-trace quality is reported separately as pass@3 and raw candidate
 correctness for every capacity-by-length cell. These descriptive generation
 metrics answer whether short trajectories from smaller or larger generators are

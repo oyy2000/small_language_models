@@ -3,6 +3,7 @@
 ## Capacity-Length Factorial v1
 
 - [x] Freeze the 1.5B/3B/7B/14B generator matrix and 128/256/512-token budgets.
+- [x] Add the user-approved seed-17 reduced rerun as a parent-hash-bound, separately labeled protocol variant.
 - [x] Implement three-candidate vLLM generation with deterministic per-request seeds.
 - [x] Implement shortest-correct, budget-compliant selection and common-problem gates.
 - [x] Implement equal-example and equal-supervision-token SFT datasets.

@@ -33,6 +33,11 @@ from length_budget_distill.student_prompts import build_student_math_prompt
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="configs/capacity_length_factorial_v1.json")
+    parser.add_argument(
+        "--run-config",
+        default=None,
+        help="Optional seed-subset overlay bound to the immutable parent protocol hash.",
+    )
     parser.add_argument("--selected-traces", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--stage", choices=["smoke", "formal"], required=True)
@@ -44,6 +49,12 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     config = load_config(args.config)
     config_hash = canonical_sha256({key: value for key, value in config.items() if key != "_config_path"})
+    configured_seeds = [int(seed) for seed in config.get("balancing", {}).get("training_seeds", [17, 42, 73])]
+    seeds, run_config_evidence, protocol_variant = _resolve_training_seeds(
+        args.run_config,
+        config_hash=config_hash,
+        configured_seeds=configured_seeds,
+    )
     selected = [trace_from_dict(row) for row in read_jsonl(Path(args.selected_traces))]
     selected_traces_sha256 = file_sha256(args.selected_traces)
     conditions = expected_conditions(config)
@@ -62,7 +73,6 @@ def main() -> None:
     if (output_dir / "DATASETS_COMPLETE").exists():
         raise FileExistsError(f"Dataset output is already complete: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
-    seeds = [int(seed) for seed in config.get("balancing", {}).get("training_seeds", [17, 42, 73])]
     run_entries: List[Dict[str, Any]] = []
 
     totals = {condition: sum(trace.solution_token_count for trace in grouped[condition]) for condition in conditions}
@@ -193,7 +203,10 @@ def main() -> None:
         "common_problem_count": len(common_ids),
         "common_problem_ids": common_ids,
         "equal_token_target": equal_token_target,
+        "configured_training_seeds": configured_seeds,
         "training_seeds": seeds,
+        "protocol_variant": protocol_variant,
+        "run_config": run_config_evidence,
         "expected_run_count": expected_runs,
         "runs": run_entries,
     }
@@ -205,9 +218,11 @@ def main() -> None:
         encoding="utf-8",
     )
     logging.info(
-        "datasets_complete common=%d runs=%d equal_token_target=%d output=%s",
+        "datasets_complete common=%d runs=%d seeds=%s variant=%s equal_token_target=%d output=%s",
         len(common_ids),
         expected_runs,
+        seeds,
+        protocol_variant,
         equal_token_target,
         output_dir,
     )
@@ -236,6 +251,42 @@ def _run_entry(
         "supervised_tokens": supervised_tokens,
         **extra,
     }
+
+
+def _resolve_training_seeds(
+    run_config_path: str | None,
+    *,
+    config_hash: str,
+    configured_seeds: List[int],
+) -> tuple[List[int], Dict[str, Any] | None, str]:
+    if not configured_seeds or len(configured_seeds) != len(set(configured_seeds)):
+        raise ValueError("balancing.training_seeds must contain unique seeds.")
+    if run_config_path is None:
+        return configured_seeds, None, "registered_parent_protocol"
+
+    path = Path(run_config_path)
+    with path.open("r", encoding="utf-8") as handle:
+        run_config = json.load(handle)
+    if not isinstance(run_config, dict):
+        raise ValueError(f"Run config must be a JSON object: {path}")
+    if run_config.get("parent_config_sha256") != config_hash:
+        raise ValueError(
+            "Run-config parent hash mismatch: "
+            f"overlay={run_config.get('parent_config_sha256')} config={config_hash}"
+        )
+    seeds = [int(seed) for seed in run_config.get("training_seeds", [])]
+    if not seeds or len(seeds) != len(set(seeds)):
+        raise ValueError("Run config must define a non-empty list of unique training_seeds.")
+    unknown = sorted(set(seeds) - set(configured_seeds))
+    if unknown:
+        raise ValueError(f"Run config requests seeds outside the parent protocol: {unknown}")
+    protocol_variant = str(run_config.get("protocol_variant", "training_seed_subset"))
+    evidence = {
+        "path": str(path),
+        "sha256": file_sha256(path),
+        "parent_config_sha256": config_hash,
+    }
+    return seeds, evidence, protocol_variant
 
 
 def _write_json(path: Path, payload: Dict[str, Any]) -> None:

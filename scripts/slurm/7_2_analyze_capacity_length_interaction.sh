@@ -36,6 +36,7 @@ OUTPUT_ROOT="${OUTPUT_ROOT:-results/capacity_length_factorial_v1}"
 python3 -u scripts/7_2_analyze_capacity_length_interaction.py \
   --config "${CONFIG}" \
   --eval-manifest-glob "${OUTPUT_ROOT}/${STAGE}/eval/eval_manifest_${STAGE}_shard_*.json" \
+  --dataset-manifest "${OUTPUT_ROOT}/${STAGE}/sft_data/dataset_manifest.json" \
   --selected-traces "${OUTPUT_ROOT}/${STAGE}/selected/selected_traces.jsonl" \
   --selection-audit "${OUTPUT_ROOT}/${STAGE}/selected/selection_audit.json" \
   --output-dir "${OUTPUT_ROOT}/${STAGE}/analysis" \
