@@ -26,6 +26,7 @@ from length_budget_distill.logit_kd import (
     read_json,
     resolve_project_path,
     runtime_metadata,
+    tokenize_kd_record,
     validate_budget_dataset,
     write_json,
 )
@@ -102,16 +103,16 @@ def main() -> None:
     config_path = resolve_project_path(args.config)
     protocol = load_protocol(config_path)
     result_root = _ensure_beegfs_result_link(protocol)
-    marker_path = result_root / "PREPARED"
+    prepared_marker_path = result_root / "PREPARED"
     evidence_path = result_root / "preflight" / "parent_evidence.json"
-    if marker_path.is_file() and evidence_path.is_file():
-        marker = read_json(marker_path)
+    if prepared_marker_path.is_file() and evidence_path.is_file():
+        marker = read_json(prepared_marker_path)
         if marker.get("parent_evidence_sha256") == file_sha256(evidence_path):
             if args.skip_complete:
                 logging.info("preflight_already_complete evidence=%s", evidence_path)
                 return
-            raise FileExistsError(f"Preflight is already complete: {marker_path}")
-        raise ValueError(f"Existing preflight marker is invalid: {marker_path}")
+            raise FileExistsError(f"Preflight is already complete: {prepared_marker_path}")
+        raise ValueError(f"Existing preflight marker is invalid: {prepared_marker_path}")
 
     parent = protocol["parent"]
     parent_config = resolve_project_path(parent["config_path"])
@@ -137,8 +138,10 @@ def main() -> None:
     evaluation_evidence = _parent_evaluations(parent_root)
     expected_runs = {"base_qwen2p5_1p5b_instruct"}
     budget_evidence: Dict[str, Any] = {}
+    budget_rows: Dict[str, Any] = {}
     for budget_name, budget in protocol["budgets"].items():
         data_path, rows = validate_budget_dataset(protocol, budget_name)
+        budget_rows[budget_name] = rows
         adapter_path = resolve_project_path(budget["baseline_adapter"])
         adapter = validated_adapter_evidence(adapter_path)
         if adapter is None:
@@ -164,13 +167,73 @@ def main() -> None:
         raise ValueError(f"Missing registered parent evaluation runs: {sorted(missing_runs)}")
 
     tokenizer_evidence = None
+    context_alignment: Dict[str, Any] = {}
     if not args.skip_tokenizer_check:
         student_tokenizer, teacher_tokenizer, valid_vocab_size, tokenizer_evidence = load_and_validate_tokenizers(
             protocol
         )
-        del student_tokenizer, teacher_tokenizer
         if valid_vocab_size != int(protocol["models"]["tokenizer"]["expected_length"]):
             raise ValueError("Registered valid vocabulary size mismatch.")
+        max_length = int(protocol["training"]["max_length"])
+        for budget_name, rows in budget_rows.items():
+            encoded = [
+                tokenize_kd_record(protocol, student_tokenizer, row, max_length)
+                for row in rows
+            ]
+            context_alignment[budget_name] = {
+                "status": "passed",
+                "records": len(encoded),
+                "target_mismatch_count": 0,
+                "context_mode": encoded[0]["context_mode"],
+                "student_context_field": encoded[0]["student_context_field"],
+                "teacher_context_field": encoded[0]["teacher_context_field"],
+                "max_teacher_sequence_tokens": max(
+                    len(item["teacher_input_ids"]) for item in encoded
+                ),
+                "max_student_sequence_tokens": max(
+                    len(item["student_input_ids"]) for item in encoded
+                ),
+                "prompt_token_delta_min": min(
+                    item["teacher_prompt_token_count"] - item["student_prompt_token_count"]
+                    for item in encoded
+                ),
+                "prompt_token_delta_max": max(
+                    item["teacher_prompt_token_count"] - item["student_prompt_token_count"]
+                    for item in encoded
+                ),
+            }
+        del student_tokenizer, teacher_tokenizer
+
+    comparison_evidence = None
+    comparison = protocol.get("comparison")
+    if comparison:
+        comparison_marker_path = resolve_project_path(
+            comparison["same_prompt_completion_marker"]
+        )
+        analysis_path = resolve_project_path(comparison["same_prompt_analysis"])
+        if not comparison_marker_path.is_file() or not analysis_path.is_file():
+            raise FileNotFoundError("Registered same-prompt comparison evidence is missing.")
+        comparison_marker = read_json(comparison_marker_path)
+        comparison_audit = Path(str(comparison_marker.get("completion_audit_path")))
+        if (
+            comparison_marker.get("status") != "complete"
+            or not comparison_audit.is_file()
+            or comparison_marker.get("completion_audit_sha256") != file_sha256(comparison_audit)
+        ):
+            raise ValueError("Same-prompt comparison completion evidence is invalid.")
+        if read_json(comparison_audit).get("status") != "passed":
+            raise ValueError("Same-prompt comparison completion audit did not pass.")
+        comparison_analysis = read_json(analysis_path)
+        if comparison_analysis.get("status") != "complete":
+            raise ValueError("Same-prompt comparison analysis is incomplete.")
+        comparison_evidence = {
+            "completion_marker": str(comparison_marker_path),
+            "completion_marker_sha256": file_sha256(comparison_marker_path),
+            "completion_audit": str(comparison_audit),
+            "completion_audit_sha256": file_sha256(comparison_audit),
+            "analysis": str(analysis_path),
+            "analysis_sha256": file_sha256(analysis_path),
+        }
 
     evidence = {
         "status": "passed",
@@ -189,11 +252,13 @@ def main() -> None:
         "budgets": budget_evidence,
         "base_evaluation": evaluation_evidence["base_qwen2p5_1p5b_instruct"],
         "tokenizer": tokenizer_evidence,
+        "context_alignment": context_alignment,
+        "comparison": comparison_evidence,
         "runtime": runtime_metadata(),
     }
     write_json(evidence_path, evidence)
     write_json(
-        marker_path,
+        prepared_marker_path,
         {
             "status": "complete",
             "protocol_hash": protocol_hash(protocol),

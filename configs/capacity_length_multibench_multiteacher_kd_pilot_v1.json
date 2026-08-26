@@ -1,0 +1,192 @@
+{
+  "experiment_name": "capacity_length_multibench_multiteacher_kd_pilot_v1",
+  "protocol_variant": "exploratory_single_seed_multibench_multiteacher_equal_token_logit_kd",
+  "evidence_level": "exploratory_single_seed_pilot",
+  "scope": "GSM8K plus MATH-train trajectories; GSM8K, MATH-500, and AIME-2025 evaluation",
+  "dataset": {
+    "source": "local_jsonl",
+    "path": "results/capacity_length_math_mix_pilot_v1/pilot/source/math_train_source_1000.jsonl",
+    "question_field": "question",
+    "answer_field": "answer",
+    "answer_format": "raw",
+    "verifier": "math_verify",
+    "max_examples": 1000
+  },
+  "source_artifacts": {
+    "gsm8k_dataset_manifest": "results/capacity_length_factorial_seed17_v1/formal/sft_data/dataset_manifest.json",
+    "gsm8k_completion_marker": "results/capacity_length_factorial_seed17_v1/formal/FORMAL_COMPLETE",
+    "math_source_manifest": "results/capacity_length_math_mix_pilot_v1/pilot/source/math_train_source_manifest.json",
+    "qwen2p5_7b_math_selected_traces": "results/capacity_length_math_mix_pilot_v1/pilot/selected/selected_traces.jsonl",
+    "qwen2p5_7b_math_selection_audit": "results/capacity_length_math_mix_pilot_v1/pilot/selected/selection_audit.json",
+    "qwen2p5_7b_math_common_problem_ids": "results/capacity_length_math_mix_pilot_v1/pilot/selected/common_problem_ids.json",
+    "math_mix_completion_marker": "results/capacity_length_math_mix_pilot_v1/pilot/PILOT_COMPLETE",
+    "inherited_kd_config": "configs/capacity_length_logit_kd_equal_token_seed17_v1.json",
+    "inherited_kd_selection": "results/capacity_length_logit_kd_equal_token_seed17_v1/validation/selection.json",
+    "inherited_kd_completion_marker": "results/capacity_length_logit_kd_equal_token_seed17_v1/FORMAL_COMPLETE",
+    "evaluation_suite_manifest": "results/capacity_length_math_mix_pilot_v1/pilot/eval_suite/eval_suite_manifest.json"
+  },
+  "generators": [
+    {
+      "name": "qwen2p5_1p5b",
+      "size_b": 1.5,
+      "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+      "model_path": "/mnt/beegfs/youyang7/.cache/huggingface/hub/models--Qwen--Qwen2.5-1.5B-Instruct/snapshots/989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+      "revision": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+      "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+      "preferred_node": "c32",
+      "backend": "vllm",
+      "dtype": "bfloat16",
+      "tensor_parallel_size": 1,
+      "trust_remote_code": false,
+      "llm_kwargs": {
+        "gpu_memory_utilization": 0.85,
+        "max_model_len": 4096,
+        "max_num_seqs": 128
+      }
+    },
+    {
+      "name": "qwen2p5_3b",
+      "size_b": 3.0,
+      "model_name": "Qwen/Qwen2.5-3B-Instruct",
+      "model_path": "/mnt/beegfs/youyang7/.cache/huggingface/hub/models--Qwen--Qwen2.5-3B-Instruct/snapshots/aa8e72537993ba99e69dfaafa59ed015b17504d1",
+      "revision": "aa8e72537993ba99e69dfaafa59ed015b17504d1",
+      "tokenizer_name": "Qwen/Qwen2.5-3B-Instruct",
+      "preferred_node": "c31",
+      "backend": "vllm",
+      "dtype": "bfloat16",
+      "tensor_parallel_size": 1,
+      "trust_remote_code": false,
+      "llm_kwargs": {
+        "gpu_memory_utilization": 0.85,
+        "max_model_len": 4096,
+        "max_num_seqs": 96
+      }
+    },
+    {
+      "name": "qwen2p5_7b",
+      "size_b": 7.0,
+      "model_name": "Qwen/Qwen2.5-7B-Instruct",
+      "model_path": "/mnt/beegfs/youyang7/.cache/huggingface/hub/models--Qwen--Qwen2.5-7B-Instruct/snapshots/a09a35458c702b33eeacc393d103063234e8bc28",
+      "revision": "a09a35458c702b33eeacc393d103063234e8bc28",
+      "tokenizer_name": "Qwen/Qwen2.5-7B-Instruct",
+      "preferred_node": "c31",
+      "backend": "vllm",
+      "dtype": "bfloat16",
+      "tensor_parallel_size": 1,
+      "trust_remote_code": false,
+      "llm_kwargs": {
+        "gpu_memory_utilization": 0.85,
+        "max_model_len": 4096,
+        "max_num_seqs": 48
+      }
+    },
+    {
+      "name": "qwen2p5_14b",
+      "size_b": 14.0,
+      "model_name": "Qwen/Qwen2.5-14B-Instruct",
+      "model_path": "/mnt/beegfs/youyang7/.cache/huggingface/hub/models--Qwen--Qwen2.5-14B-Instruct/snapshots/cf98f3b3bbb457ad9e2bb7baf9a0125b6b88caa8",
+      "revision": "cf98f3b3bbb457ad9e2bb7baf9a0125b6b88caa8",
+      "tokenizer_name": "Qwen/Qwen2.5-14B-Instruct",
+      "preferred_node": "c30",
+      "backend": "vllm",
+      "dtype": "bfloat16",
+      "tensor_parallel_size": 1,
+      "trust_remote_code": false,
+      "llm_kwargs": {
+        "gpu_memory_utilization": 0.85,
+        "max_model_len": 4096,
+        "max_num_seqs": 24
+      }
+    }
+  ],
+  "generation": {
+    "num_candidates": 3,
+    "base_seed": 20260823,
+    "batch_size": 32,
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "max_new_tokens": 1024,
+    "cap_max_new_tokens_by_budget": false,
+    "stop": ["<|im_end|>"]
+  },
+  "length_budgets": [
+    {
+      "name": "short_128",
+      "max_solution_tokens": 128,
+      "style_hint": "Use compressed equations and only essential words, but always include the final Answer line."
+    },
+    {
+      "name": "medium_256",
+      "max_solution_tokens": 256,
+      "style_hint": "Use concise step-by-step reasoning and include the final Answer line."
+    },
+    {
+      "name": "long_512",
+      "max_solution_tokens": 512,
+      "style_hint": "Use detailed step-by-step reasoning and include the final Answer line."
+    }
+  ],
+  "token_counter": {
+    "backend": "hf_tokenizer",
+    "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "trust_remote_code": false,
+    "tokenizer_kwargs": {
+      "cache_dir": "/mnt/beegfs/youyang7/.cache/huggingface/hub"
+    }
+  },
+  "output": {
+    "include_prompt_in_trace": true
+  },
+  "balancing": {
+    "support_scope": "within_teacher_across_length_budgets",
+    "pilot_min_common_problems": 50,
+    "training_seeds": [17],
+    "supervision_mode": "equal_token",
+    "math_token_target_scope": "global_across_teacher_and_length",
+    "gsm8k_registered_solution_token_target": 31443,
+    "max_equal_token_gap": 512
+  },
+  "student": {
+    "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "revision": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+    "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "trust_remote_code": false,
+    "torch_dtype": "bfloat16",
+    "use_lora": true,
+    "lora": {
+      "r": 4,
+      "alpha": 16,
+      "dropout": 0.05,
+      "target_modules": "all-linear"
+    }
+  },
+  "kd": {
+    "loss_direction": "teacher_to_student_forward_kl",
+    "completion_only": true,
+    "hyperparameters": "inherit_selected_from_equal_token_7b_gsm8k",
+    "train_hard_ce_baseline": true,
+    "top_k_for_diagnostics": 64
+  },
+  "training": {
+    "seed": 17,
+    "num_train_epochs": 1,
+    "per_device_train_batch_size": 1,
+    "gradient_accumulation_steps": 4,
+    "learning_rate": 0.00002,
+    "warmup_ratio": 0.03,
+    "max_length": 2048,
+    "gradient_checkpointing": true,
+    "max_grad_norm": 1.0,
+    "report_every_optimizer_steps": 10
+  },
+  "evaluation": {
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "batch_size": 32
+  },
+  "outputs": {
+    "result_root": "results/capacity_length_multibench_multiteacher_kd_pilot_v1",
+    "checkpoint_root": "checkpoints/capacity_length_multibench_multiteacher_kd_pilot_v1/pilot",
+    "figure_root": "figures/capacity_length_multibench_multiteacher_kd_pilot_v1"
+  }
+}

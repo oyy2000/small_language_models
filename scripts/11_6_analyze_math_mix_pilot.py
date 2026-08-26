@@ -8,7 +8,6 @@ import csv
 import glob
 import json
 import logging
-import math
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
@@ -19,7 +18,12 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from length_budget_distill.factorial import canonical_sha256, file_sha256
-from length_budget_distill.factorial_analysis import holm_adjust, paired_cluster_bootstrap
+from length_budget_distill.factorial_analysis import (
+    exact_mcnemar_p_value,
+    holm_adjust,
+    paired_cluster_bootstrap,
+    wilson_interval,
+)
 from length_budget_distill.records import read_jsonl
 from length_budget_distill.sft_accuracy_plot import (
     BASELINE_COLOR,
@@ -80,7 +84,7 @@ def main() -> None:
             if len(mapping) != expected_n:
                 raise ValueError(f"Duplicate prediction IDs: {model_id}/{dataset_name}")
             predictions[(model_id, dataset_name)] = mapping
-            ci_low, ci_high = _wilson_interval(int(summary["correct"]), expected_n)
+            ci_low, ci_high = wilson_interval(int(summary["correct"]), expected_n)
             metric_rows.append(
                 {
                     "model_id": model_id,
@@ -138,7 +142,7 @@ def main() -> None:
                         "bootstrap_ci_high": bootstrap["ci_high"],
                         "mixed_only_correct": mixed_wins,
                         "reference_only_correct": reference_wins,
-                        "mcnemar_p_value": _exact_mcnemar_p_value(mixed_wins, reference_wins),
+                        "mcnemar_p_value": exact_mcnemar_p_value(mixed_wins, reference_wins),
                     }
                 )
         adjusted = holm_adjust([float(row["mcnemar_p_value"]) for row in dataset_rows])
@@ -216,25 +220,6 @@ def _comparison_registry(metadata_by_model: Mapping[str, Mapping[str, Any]]) -> 
     if set(registry) != expected:
         raise ValueError(f"Incomplete comparison registry: observed={sorted(registry)}")
     return registry
-
-
-def _wilson_interval(correct: int, total: int, z: float = 1.959963984540054) -> Tuple[float, float]:
-    if total <= 0:
-        return 0.0, 0.0
-    proportion = correct / total
-    denominator = 1.0 + z * z / total
-    center = (proportion + z * z / (2.0 * total)) / denominator
-    radius = z * math.sqrt(proportion * (1.0 - proportion) / total + z * z / (4.0 * total * total)) / denominator
-    return max(0.0, center - radius), min(1.0, center + radius)
-
-
-def _exact_mcnemar_p_value(left_only: int, right_only: int) -> float:
-    discordant = left_only + right_only
-    if discordant == 0:
-        return 1.0
-    smaller = min(left_only, right_only)
-    tail = sum(math.comb(discordant, value) for value in range(smaller + 1)) / (2**discordant)
-    return min(1.0, 2.0 * tail)
 
 
 def _write_accuracy_figure(rows: Sequence[Mapping[str, Any]], png_path: Path, pdf_path: Path) -> None:

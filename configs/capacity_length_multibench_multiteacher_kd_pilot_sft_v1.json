@@ -1,0 +1,8 @@
+{
+  "parent_config_sha256": "55e8be51a31832315eac88128b4bc84f14af88d50df0bea29333b16e1058574e",
+  "training_overrides": {
+    "per_device_train_batch_size": 1,
+    "gradient_accumulation_steps": 4
+  },
+  "rationale": "Match the registered equal-token logit-KD optimizer batch topology so the hard-target SFT baseline differs only in its loss."
+}

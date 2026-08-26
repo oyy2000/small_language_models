@@ -16,14 +16,19 @@ if str(SRC_ROOT) not in sys.path:
 
 from length_budget_distill.logit_kd import (
     baseline_sft_run_name,
+    compliance_gate_satisfied,
     float_slug,
     hybrid_kd_loss,
     invalid_vocab_probability_mass,
+    kd_context_fields,
     kd_run_name,
     load_protocol,
     supervision_mode,
     tokenize_completion_record,
+    tokenize_kd_record,
+    validate_budget_dataset,
 )
+from length_budget_distill.factorial import file_sha256
 
 
 class FakeChatTokenizer:
@@ -38,6 +43,28 @@ class FakeChatTokenizer:
         if add_generation_prompt:
             raise AssertionError("Full conversation must not request another generation prompt.")
         return [1, 2, 3, 4, 5, 9]
+
+
+class DualContextFakeChatTokenizer:
+    eos_token_id = 9
+
+    def __init__(self, mismatch: bool = False) -> None:
+        self.mismatch = mismatch
+
+    def apply_chat_template(self, messages, tokenize, add_generation_prompt=False):
+        if not tokenize:
+            raise AssertionError("Tests require tokenized chat templates.")
+        prompt = messages[0]["content"]
+        is_teacher = prompt.startswith("teacher")
+        prefix = [7, 8, 3] if is_teacher else [1, 2, 3]
+        if len(messages) == 1:
+            if not add_generation_prompt:
+                raise AssertionError("Prompt-only formatting must request a generation prompt.")
+            return prefix
+        if add_generation_prompt:
+            raise AssertionError("Full conversation must not request another generation prompt.")
+        targets = [6, 5, 9] if self.mismatch and is_teacher else [4, 5, 9]
+        return prefix + targets
 
 
 class LogitKDTest(unittest.TestCase):
@@ -93,6 +120,139 @@ class LogitKDTest(unittest.TestCase):
                 {"id": "row-1", "prompt": "question", "completion": "answer", "metadata": {}},
                 max_length=5,
             )
+
+    def test_dual_context_tokenization_aligns_one_completion(self) -> None:
+        protocol = {
+            "kd": {
+                "context_mode": "dual_prompt_teacher_forced",
+                "student_context_field": "prompt",
+                "teacher_context_field": "teacher_prompt",
+            }
+        }
+        encoded = tokenize_kd_record(
+            protocol,
+            DualContextFakeChatTokenizer(),
+            {
+                "id": "row-1",
+                "prompt": "student question",
+                "teacher_prompt": "teacher budget question",
+                "completion": "answer",
+                "metadata": {"problem_id": "problem-1"},
+            },
+            max_length=16,
+        )
+        self.assertEqual(encoded["student_input_ids"], [1, 2, 3, 4, 5, 9])
+        self.assertEqual(encoded["teacher_input_ids"], [7, 8, 3, 4, 5, 9])
+        self.assertEqual(encoded["target_ids"], [4, 5, 9])
+        self.assertEqual(encoded["context_mode"], "dual_prompt_teacher_forced")
+
+    def test_dual_context_tokenization_rejects_target_mismatch(self) -> None:
+        protocol = {
+            "kd": {
+                "context_mode": "dual_prompt_teacher_forced",
+                "student_context_field": "prompt",
+                "teacher_context_field": "teacher_prompt",
+            }
+        }
+        with self.assertRaisesRegex(ValueError, "identical completion targets"):
+            tokenize_kd_record(
+                protocol,
+                DualContextFakeChatTokenizer(mismatch=True),
+                {
+                    "id": "row-1",
+                    "prompt": "student question",
+                    "teacher_prompt": "teacher budget question",
+                    "completion": "answer",
+                    "metadata": {},
+                },
+                max_length=16,
+            )
+
+    def test_legacy_context_defaults_to_prompt_for_both_models(self) -> None:
+        self.assertEqual(
+            kd_context_fields({"kd": {}}),
+            ("prompt", "prompt", "same_prompt_teacher_forced"),
+        )
+
+    def test_dual_context_protocol_loads(self) -> None:
+        config = load_protocol(
+            PROJECT_ROOT
+            / "configs/capacity_length_logit_kd_teacher_prompt_equal_token_seed17_v1.json"
+        )
+        self.assertEqual(
+            kd_context_fields(config),
+            ("prompt", "teacher_prompt", "dual_prompt_teacher_forced"),
+        )
+        self.assertEqual(config["validation"]["max_compliance_drop"], 0.02)
+
+    def test_compliance_gate_uses_registered_two_point_margin(self) -> None:
+        self.assertTrue(
+            compliance_gate_satisfied(
+                {
+                    "short_128": {"compliance_delta_vs_sft": -0.02},
+                    "medium_256": {"compliance_delta_vs_sft": -0.019},
+                    "long_512": {"compliance_delta_vs_sft": 0.0},
+                },
+                0.02,
+            )
+        )
+        self.assertFalse(
+            compliance_gate_satisfied(
+                {
+                    "short_128": {"compliance_delta_vs_sft": -0.021},
+                    "medium_256": {"compliance_delta_vs_sft": 0.0},
+                    "long_512": {"compliance_delta_vs_sft": 0.0},
+                },
+                0.02,
+            )
+        )
+
+    def test_multiteacher_condition_validates_teacher_and_benchmark_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_path = Path(temp_dir) / "mixed.jsonl"
+            rows = []
+            for source, tokens in (("gsm8k", 7), ("hendrycks_math", 11)):
+                rows.append(
+                    {
+                        "id": f"{source}::row",
+                        "prompt": "question",
+                        "completion": "answer",
+                        "metadata": {
+                            "problem_id": f"{source}-problem",
+                            "budget_name": "medium_256",
+                            "generator_name": "qwen2p5_3b",
+                            "dataset_source": source,
+                            "solution_token_count": tokens,
+                            "is_correct": True,
+                            "budget_compliant": True,
+                        },
+                    }
+                )
+            data_path.write_text(
+                "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+            )
+            protocol = {
+                "budgets": {
+                    "qwen2p5_3b__medium_256": {
+                        "budget_name": "medium_256",
+                        "train_path": str(data_path),
+                        "train_sha256": file_sha256(data_path),
+                        "expected_records": 2,
+                        "expected_solution_tokens": 18,
+                        "expected_generator_name": "qwen2p5_3b",
+                        "expected_dataset_sources": ["gsm8k", "hendrycks_math"],
+                        "expected_source_counts": {"gsm8k": 1, "hendrycks_math": 1},
+                        "expected_source_solution_tokens": {
+                            "gsm8k": 7,
+                            "hendrycks_math": 11,
+                        },
+                    }
+                }
+            }
+            _, observed = validate_budget_dataset(
+                protocol, "qwen2p5_3b__medium_256"
+            )
+            self.assertEqual(len(observed), 2)
 
     @unittest.skipUnless(importlib.util.find_spec("torch"), "torch is unavailable in this environment")
     def test_alpha_zero_matches_hard_cross_entropy(self) -> None:

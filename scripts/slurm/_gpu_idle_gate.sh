@@ -85,3 +85,58 @@ select_stably_idle_gpus() {
     sleep "${wait_seconds}"
   done
 }
+
+# Select GPUs by remaining capacity only. This is intended for C49, where the
+# user's grabgpu keepalive processes are expected and utilization is not an
+# admission criterion. Existing process memory is already reflected in
+# memory.free; callers must set a threshold that includes workload headroom.
+select_stably_memory_fit_gpus() {
+  local min_free_mib="${1:?minimum free memory is required}"
+  local min_gpus="${2:-1}"
+  local wait_seconds="${3:-30}"
+  local stable_checks="${4:-2}"
+  local stable_count=0
+  local previous_signature=""
+  local signature=""
+  local gpu_id free_mib
+  local -a eligible_gpu_ids=()
+
+  if [ "${min_gpus}" -le 0 ] || [ "${stable_checks}" -le 0 ]; then
+    echo "min_gpus and stable_checks must be positive." >&2
+    return 2
+  fi
+
+  while true; do
+    eligible_gpu_ids=()
+    while IFS=',' read -r gpu_id free_mib; do
+      gpu_id="${gpu_id//[[:space:]]/}"
+      free_mib="${free_mib//[[:space:]]/}"
+      if [ "${free_mib}" -ge "${min_free_mib}" ]; then
+        eligible_gpu_ids+=("${gpu_id}")
+      fi
+    done < <(nvidia-smi --query-gpu=index,memory.free --format=csv,noheader,nounits)
+
+    signature="${eligible_gpu_ids[*]}"
+    if [ "${#eligible_gpu_ids[@]}" -ge "${min_gpus}" ]; then
+      if [ "${signature}" = "${previous_signature}" ]; then
+        stable_count=$((stable_count + 1))
+      else
+        stable_count=1
+      fi
+      previous_signature="${signature}"
+      if [ "${stable_count}" -ge "${stable_checks}" ]; then
+        GPU_IDS=("${eligible_gpu_ids[@]}")
+        echo "Selected stable memory-fit GPUs on $(hostname): ${GPU_IDS[*]}"
+        return 0
+      fi
+    else
+      stable_count=0
+      previous_signature=""
+    fi
+
+    echo "Waiting for memory capacity without interference: eligible=${#eligible_gpu_ids[@]}/${min_gpus}, stable_checks=${stable_count}/${stable_checks}, free>=${min_free_mib} MiB."
+    nvidia-smi --query-gpu=index,memory.used,memory.free,utilization.gpu --format=csv,noheader
+    nvidia-smi --query-compute-apps=gpu_uuid,pid,process_name,used_memory --format=csv,noheader,nounits || true
+    sleep "${wait_seconds}"
+  done
+}

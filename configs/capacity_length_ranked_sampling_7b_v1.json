@@ -1,0 +1,75 @@
+{
+  "experiment_name": "capacity_length_ranked_sampling_7b_v1",
+  "dataset": {
+    "source": "hf_dataset",
+    "dataset_name": "openai/gsm8k",
+    "dataset_config": "main",
+    "split": "train",
+    "question_field": "question",
+    "answer_field": "answer",
+    "answer_format": "gsm8k",
+    "verifier": "gsm8k_numeric",
+    "max_examples": 2000
+  },
+  "cohort": {
+    "problem_ids_path": "results/capacity_length_factorial_seed17_v1/formal/sft_data/dataset_manifest.json",
+    "problem_ids_field": "common_problem_ids",
+    "problem_ids_file_sha256": "d06f70d9e3a4e4cc8b5655349a1a403b4c6375246a3939e8a7796fb9c3bdadef",
+    "expected_problem_count": 881,
+    "description": "Hash-bound common cohort from the completed revised seed-17 factorial experiment."
+  },
+  "teacher": {
+    "name": "qwen2p5_7b",
+    "size_b": 7.0,
+    "model_name": "Qwen/Qwen2.5-7B-Instruct",
+    "tokenizer_name": "Qwen/Qwen2.5-7B-Instruct",
+    "backend": "vllm",
+    "dtype": "bfloat16",
+    "tensor_parallel_size": 1,
+    "trust_remote_code": false,
+    "tokenizer_kwargs": {
+      "cache_dir": "/mnt/beegfs/youyang7/.cache/huggingface/hub"
+    },
+    "llm_kwargs": {
+      "gpu_memory_utilization": 0.66,
+      "max_model_len": 2048,
+      "max_num_seqs": 64
+    }
+  },
+  "generation": {
+    "num_candidates": 16,
+    "num_shards": 3,
+    "base_seed": 20260825,
+    "batch_size": 4,
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "max_new_tokens": 512,
+    "cap_max_new_tokens_by_budget": false,
+    "stop": [
+      "<|im_end|>"
+    ]
+  },
+  "relative_length_selection": {
+    "labels": [
+      "short",
+      "medium",
+      "long"
+    ],
+    "method": "shortest_lower_median_longest",
+    "deduplication": "whitespace_normalized_exact_text",
+    "minimum_unique_correct": 3,
+    "insufficient_candidate_policy": "drop_problem_from_all_labels"
+  },
+  "token_counter": {
+    "backend": "hf_tokenizer",
+    "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "trust_remote_code": false,
+    "tokenizer_kwargs": {
+      "cache_dir": "/mnt/beegfs/youyang7/.cache/huggingface/hub"
+    }
+  },
+  "output": {
+    "include_prompt_in_trace": true,
+    "text_format": "prompt_completion"
+  }
+}

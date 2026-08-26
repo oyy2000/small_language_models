@@ -16,7 +16,7 @@ from typing import Any, Dict
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
-def run_trl_sft(config: Dict[str, Any]) -> None:
+def run_trl_sft(config: Dict[str, Any]) -> Any:
     try:
         from datasets import load_dataset
         from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -114,6 +114,7 @@ def run_trl_sft(config: Dict[str, Any]) -> None:
     trainer = SFTTrainer(**trainer_kwargs)
     trainer.train()
     trainer.save_model(training["output_dir"])
+    return trainer
 
 
 def _resolve_project_path(path_value: str) -> Path:
@@ -300,7 +301,7 @@ def _make_sft_config(
         "learning_rate": float(training_config.get("learning_rate", 2e-5)),
         "warmup_ratio": float(training_config.get("warmup_ratio", 0.03)),
         "logging_steps": int(training_config.get("logging_steps", 10)),
-        "save_steps": int(training_config.get("save_steps", 200)),
+        "save_steps": _int_or_ratio(training_config.get("save_steps", 200)),
         "bf16": bool(training_config.get("bf16", True)),
         "gradient_checkpointing": bool(training_config.get("gradient_checkpointing", True)),
         "report_to": training_config.get("report_to", "none"),
@@ -328,6 +329,18 @@ def _make_sft_config(
         kwargs["seed"] = int(training_config["seed"])
     if "data_seed" in training_config:
         kwargs["data_seed"] = int(training_config["data_seed"])
+    optional_values = {
+        "save_strategy": training_config.get("save_strategy"),
+        "save_total_limit": training_config.get("save_total_limit"),
+        "max_grad_norm": training_config.get("max_grad_norm"),
+        "weight_decay": training_config.get("weight_decay"),
+        "lr_scheduler_type": training_config.get("lr_scheduler_type"),
+        "warmup_steps": training_config.get("warmup_steps"),
+        "disable_tqdm": training_config.get("disable_tqdm"),
+    }
+    for key, value in optional_values.items():
+        if value is not None:
+            kwargs[key] = value
 
     accepts_arbitrary_kwargs = any(
         parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in parameters.values()
@@ -336,6 +349,15 @@ def _make_sft_config(
         key: value for key, value in kwargs.items() if key in parameters
     }
     return sft_config_cls(**supported_kwargs)
+
+
+def _int_or_ratio(value: Any) -> int | float:
+    """Preserve Trainer's fractional step interval convention."""
+
+    numeric = float(value)
+    if 0.0 < numeric < 1.0:
+        return numeric
+    return int(numeric)
 
 
 def _make_completion_only_collator(

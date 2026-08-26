@@ -1,0 +1,8 @@
+{
+  "parent_config_sha256": "125dcf1b8c5a992f0f42e8c15eb8e56edef6fcbca660a3fbce07fa918082b561",
+  "training_overrides": {
+    "per_device_train_batch_size": 4,
+    "gradient_accumulation_steps": 1
+  },
+  "rationale": "Reuse the registered factorial SFT correction so every selected example is consumed exactly once in one epoch."
+}

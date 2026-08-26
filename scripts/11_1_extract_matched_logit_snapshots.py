@@ -30,7 +30,7 @@ from length_budget_distill.logit_kd import (
     read_json,
     resolve_project_path,
     runtime_metadata,
-    tokenize_completion_record,
+    tokenize_kd_record,
     validate_budget_dataset,
     validated_training_marker,
     write_json,
@@ -187,18 +187,31 @@ def main() -> None:
         for local_index, (source_index, row) in enumerate(assigned, start=1):
             import torch
 
-            encoded = tokenize_completion_record(tokenizer, row, max_length)
-            input_ids = torch.tensor([encoded["input_ids"]], dtype=torch.long, device="cuda")
+            encoded = tokenize_kd_record(protocol, tokenizer, row, max_length)
+            teacher_input_ids = torch.tensor(
+                [encoded["teacher_input_ids"]], dtype=torch.long, device="cuda"
+            )
+            student_input_ids = torch.tensor(
+                [encoded["student_input_ids"]], dtype=torch.long, device="cuda"
+            )
             targets = torch.tensor(encoded["target_ids"], dtype=torch.long, device="cuda")
             with torch.inference_mode():
-                teacher_logits = causal_completion_logits(teacher, input_ids, encoded["prompt_token_count"])
+                teacher_logits = causal_completion_logits(
+                    teacher,
+                    teacher_input_ids,
+                    encoded["teacher_prompt_token_count"],
+                )
                 teacher_snapshot = _snapshot_tensors(teacher_logits, targets, valid_vocab_size, top_k)
                 if args.method == "teacher":
                     output_tensors = _clean_snapshot(teacher_snapshot)
                 else:
                     if student is None:
                         raise AssertionError("Student model was not loaded.")
-                    student_logits = causal_completion_logits(student, input_ids, encoded["prompt_token_count"])
+                    student_logits = causal_completion_logits(
+                        student,
+                        student_input_ids,
+                        encoded["student_prompt_token_count"],
+                    )
                     student_snapshot = _snapshot_tensors(student_logits, targets, valid_vocab_size, top_k)
                     output_tensors = _clean_snapshot(student_snapshot)
                     output_tensors.update(_pair_metrics(teacher_snapshot, student_snapshot))
@@ -211,14 +224,16 @@ def main() -> None:
                     "source_index": source_index,
                     "record_id": encoded["record_id"],
                     "problem_id": encoded["problem_id"],
-                    "prompt_token_count": encoded["prompt_token_count"],
+                    "context_mode": encoded["context_mode"],
+                    "teacher_prompt_token_count": encoded["teacher_prompt_token_count"],
+                    "student_prompt_token_count": encoded["student_prompt_token_count"],
                     "completion_token_count": token_count,
                     "offset_start": offset,
                     "offset_end": offset + token_count,
                 }
             )
             offset += token_count
-            del input_ids, targets, teacher_logits, teacher_snapshot, output_tensors
+            del teacher_input_ids, student_input_ids, targets, teacher_logits, teacher_snapshot, output_tensors
             if local_index % 25 == 0 or local_index == len(assigned):
                 logging.info(
                     "logit_progress budget=%s method=%s shard=%d/%d records=%d/%d tokens=%d",
@@ -251,6 +266,9 @@ def main() -> None:
             "protocol_hash": protocol_hash(protocol),
             "budget_name": args.budget,
             "method": args.method,
+            "context_mode": protocol["kd"].get("context_mode", "same_prompt_teacher_forced"),
+            "teacher_context_field": protocol["kd"].get("teacher_context_field", "prompt"),
+            "student_context_field": protocol["kd"].get("student_context_field", "prompt"),
             "student_adapter": str(adapter) if adapter is not None else None,
             "source_path": str(data_path),
             "source_sha256": file_sha256(data_path),

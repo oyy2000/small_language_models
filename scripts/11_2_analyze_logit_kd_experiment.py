@@ -154,7 +154,20 @@ def _write_csv(path: Path, rows: List[Dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
-def _figures(output_dir: Path, run_rows: List[Dict[str, Any]], logit_rows: List[Dict[str, Any]]) -> List[Path]:
+def _save_figure(figure: Any, png_path: Path) -> List[Path]:
+    pdf_path = png_path.with_suffix(".pdf")
+    figure.tight_layout()
+    figure.savefig(png_path, dpi=220)
+    figure.savefig(pdf_path)
+    return [png_path, pdf_path]
+
+
+def _figures(
+    output_dir: Path,
+    run_rows: List[Dict[str, Any]],
+    logit_rows: List[Dict[str, Any]],
+    kd_label: str,
+) -> List[Path]:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -162,12 +175,22 @@ def _figures(output_dir: Path, run_rows: List[Dict[str, Any]], logit_rows: List[
 
     budgets = ["short_128", "medium_256", "long_512"]
     labels = ["Short (128)", "Medium (256)", "Long (512)"]
-    colors = {"SFT": "#4C78A8", "Logit KD": "#F58518"}
+    budget_methods = ["SFT"]
+    if any(row["method"] == "Same-prompt KD" for row in run_rows):
+        budget_methods.append("Same-prompt KD")
+    budget_methods.append(kd_label)
+    colors = {
+        "SFT": "#4C78A8",
+        "Same-prompt KD": "#B9A0D3",
+        kd_label: "#F58518",
+    }
+    artifacts: List[Path] = []
     accuracy_path = output_dir / "accuracy_by_budget.png"
     figure, axis = plt.subplots(figsize=(7.2, 4.5))
     x = list(range(len(budgets)))
-    width = 0.34
-    for offset, method in [(-width / 2, "SFT"), (width / 2, "Logit KD")]:
+    width = 0.8 / len(budget_methods)
+    for method_index, method in enumerate(budget_methods):
+        offset = (method_index - (len(budget_methods) - 1) / 2) * width
         values = [next(row["accuracy"] for row in run_rows if row["method"] == method and row["budget_name"] == budget) for budget in budgets]
         axis.bar([value + offset for value in x], values, width=width, label=method, color=colors[method])
     base_accuracy = next(row["accuracy"] for row in run_rows if row["method"] == "Base")
@@ -177,13 +200,39 @@ def _figures(output_dir: Path, run_rows: List[Dict[str, Any]], logit_rows: List[
     axis.set_ylim(0, 1)
     axis.legend()
     axis.grid(axis="y", alpha=0.25)
-    figure.tight_layout()
-    figure.savefig(accuracy_path, dpi=220)
+    artifacts.extend(_save_figure(figure, accuracy_path))
+    plt.close(figure)
+
+    compliance_path = output_dir / "budget_compliance_by_budget.png"
+    figure, axis = plt.subplots(figsize=(7.2, 4.5))
+    for method_index, method in enumerate(budget_methods):
+        offset = (method_index - (len(budget_methods) - 1) / 2) * width
+        values = [
+            next(
+                row["budget_compliance"]
+                for row in run_rows
+                if row["method"] == method and row["budget_name"] == budget
+            )
+            for budget in budgets
+        ]
+        axis.bar(
+            [value + offset for value in x],
+            values,
+            width=width,
+            label=method,
+            color=colors[method],
+        )
+    axis.set_xticks(x, labels)
+    axis.set_ylabel("Budget compliance")
+    axis.set_ylim(0, 1.05)
+    axis.legend()
+    axis.grid(axis="y", alpha=0.25)
+    artifacts.extend(_save_figure(figure, compliance_path))
     plt.close(figure)
 
     pareto_path = output_dir / "accuracy_length_pareto.png"
     figure, axis = plt.subplots(figsize=(6.5, 4.8))
-    for method in ("Base", "SFT", "Logit KD"):
+    for method in ("Base", *budget_methods):
         selected = [row for row in run_rows if row["method"] == method]
         axis.scatter(
             [row["mean_output_tokens"] for row in selected],
@@ -198,13 +247,12 @@ def _figures(output_dir: Path, run_rows: List[Dict[str, Any]], logit_rows: List[
     axis.set_ylabel("GSM8K accuracy")
     axis.grid(alpha=0.25)
     axis.legend()
-    figure.tight_layout()
-    figure.savefig(pareto_path, dpi=220)
+    artifacts.extend(_save_figure(figure, pareto_path))
     plt.close(figure)
 
     kl_path = output_dir / "matched_teacher_student_kl.png"
     figure, axis = plt.subplots(figsize=(7.2, 4.5))
-    methods = ["Base", "SFT", "Logit KD"]
+    methods = ["Base", "SFT", kd_label]
     width = 0.24
     for method_index, method in enumerate(methods):
         values = [next(row["mean_teacher_to_student_kl"] for row in logit_rows if row["method"] == method and row["budget_name"] == budget) for budget in budgets]
@@ -218,16 +266,17 @@ def _figures(output_dir: Path, run_rows: List[Dict[str, Any]], logit_rows: List[
     axis.set_ylabel("Exact teacher→student KL (nats/token)")
     axis.grid(axis="y", alpha=0.25)
     axis.legend()
-    figure.tight_layout()
-    figure.savefig(kl_path, dpi=220)
+    artifacts.extend(_save_figure(figure, kl_path))
     plt.close(figure)
-    return [accuracy_path, pareto_path, kl_path]
+    return artifacts
 
 
 def main() -> None:
     args = parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     protocol = load_protocol(args.config)
+    context_mode = str(protocol["kd"].get("context_mode", "same_prompt_teacher_forced"))
+    kd_label = "Teacher-prompt KD" if context_mode == "dual_prompt_teacher_forced" else "Logit KD"
     result_root = resolve_project_path(protocol["outputs"]["result_root"])
     preflight = read_json(result_root / "preflight" / "parent_evidence.json")
     selection = read_json(result_root / "validation" / "selection.json")
@@ -271,7 +320,7 @@ def main() -> None:
                     **sft_metrics,
                 },
                 {
-                    "method": "Logit KD",
+                    "method": kd_label,
                     "budget_name": budget_name,
                     "budget_tokens": budget_tokens,
                     "prediction_path": str(kd_prediction),
@@ -298,6 +347,66 @@ def main() -> None:
     for row, adjusted_p in zip(contrasts, adjusted):
         row["mcnemar_holm_p_value"] = adjusted_p
 
+    prompt_context_contrasts: List[Dict[str, Any]] = []
+    comparison_evidence = preflight.get("comparison")
+    if comparison_evidence:
+        comparison_analysis_path = Path(comparison_evidence["analysis"])
+        if comparison_evidence.get("analysis_sha256") != file_sha256(comparison_analysis_path):
+            raise ValueError("Same-prompt comparison analysis hash mismatch.")
+        comparison_analysis = read_json(comparison_analysis_path)
+        context_p_values = []
+        for budget_name, budget in protocol["budgets"].items():
+            budget_tokens = int(budget["max_solution_tokens"])
+            old_row = next(
+                row
+                for row in comparison_analysis["run_metrics"]
+                if row["method"] == "Logit KD" and row["budget_name"] == budget_name
+            )
+            old_prediction = Path(old_row["prediction_path"])
+            old_metrics = _prediction_metrics(old_prediction, budget_tokens)
+            run_rows.append(
+                {
+                    "method": "Same-prompt KD",
+                    "budget_name": budget_name,
+                    "budget_tokens": budget_tokens,
+                    "prediction_path": str(old_prediction),
+                    **old_metrics,
+                }
+            )
+            new_row = next(
+                row
+                for row in run_rows
+                if row["method"] == kd_label and row["budget_name"] == budget_name
+            )
+            new_prediction = Path(new_row["prediction_path"])
+            old_map = _prediction_map(old_prediction)
+            new_map = _prediction_map(new_prediction)
+            paired = _paired_accuracy_bootstrap(
+                new_map,
+                old_map,
+                int(protocol["formal"]["bootstrap_samples"]),
+            )
+            mcnemar = _mcnemar_exact(new_map, old_map)
+            context_p_values.append(mcnemar["p_value"])
+            prompt_context_contrasts.append(
+                {
+                    "budget_name": budget_name,
+                    "accuracy_delta_teacher_prompt_vs_same_prompt": (
+                        new_row["accuracy"] - old_metrics["accuracy"]
+                    ),
+                    "budget_compliance_delta_teacher_prompt_vs_same_prompt": (
+                        new_row["budget_compliance"] - old_metrics["budget_compliance"]
+                    ),
+                    "mean_output_token_delta_teacher_prompt_vs_same_prompt": (
+                        new_row["mean_output_tokens"] - old_metrics["mean_output_tokens"]
+                    ),
+                    **{f"bootstrap_{key}": value for key, value in paired.items()},
+                    **{f"mcnemar_{key}": value for key, value in mcnemar.items()},
+                }
+            )
+        for row, adjusted_p in zip(prompt_context_contrasts, holm_adjust(context_p_values)):
+            row["mcnemar_holm_p_value"] = adjusted_p
+
     num_shards = int(protocol["outputs"]["logit_shards_per_snapshot"])
     logit_rows = []
     logit_evidence: Dict[str, Any] = {}
@@ -311,7 +420,7 @@ def main() -> None:
             expected_records,
         )
         logit_evidence[budget_name]["teacher"] = teacher_metrics
-        for method_dir, method_label in (("base", "Base"), ("sft", "SFT"), ("kd", "Logit KD")):
+        for method_dir, method_label in (("base", "Base"), ("sft", "SFT"), ("kd", kd_label)):
             metrics = _logit_metrics(
                 result_root / "formal" / "logits" / budget_name / method_dir,
                 num_shards,
@@ -326,7 +435,12 @@ def main() -> None:
                     **{key: value for key, value in metrics.items() if not isinstance(value, list)},
                 }
             )
-    improved_all = all(row["accuracy_delta"] > 0 and row["budget_compliance_delta"] >= 0 for row in contrasts)
+    max_compliance_drop = float(protocol["validation"].get("max_compliance_drop", 0.0))
+    improved_all = all(
+        row["accuracy_delta"] > 0
+        and row["budget_compliance_delta"] >= -max_compliance_drop
+        for row in contrasts
+    )
     statistically_supported_all = improved_all and all(
         row["mcnemar_holm_p_value"] < float(protocol["formal"]["familywise_alpha"])
         and row["bootstrap_ci_low"] > 0
@@ -334,24 +448,29 @@ def main() -> None:
     )
     conclusion = {
         "classification": (
-            "all_budgets_improved_with_statistical_support"
+            "all_budgets_improved_within_compliance_margin_and_statistical_support"
             if statistically_supported_all
-            else "all_budgets_directionally_improved"
+            else "all_budgets_directionally_improved_within_compliance_margin"
             if improved_all
             else "mixed_or_negative_formal_result"
         ),
-        "all_budgets_accuracy_improved_and_budget_compliance_non_decreasing": improved_all,
+        "all_budgets_accuracy_improved_within_compliance_margin": improved_all,
+        "registered_max_compliance_drop": max_compliance_drop,
         "all_budgets_holm_significant": statistically_supported_all,
         "formal_test_used_for_retuning": False,
+        "formal_test_is_adaptive_diagnostic": bool(protocol.get("evidence_level")),
         "training_seed_variability_estimated": False,
     }
     run_csv = output_dir / "run_metrics.csv"
     contrast_csv = output_dir / "sft_vs_kd_contrasts.csv"
+    context_contrast_csv = output_dir / "same_prompt_vs_teacher_prompt_contrasts.csv"
     logit_csv = output_dir / "matched_logit_metrics.csv"
     _write_csv(run_csv, run_rows)
     _write_csv(contrast_csv, contrasts)
+    if prompt_context_contrasts:
+        _write_csv(context_contrast_csv, prompt_context_contrasts)
     _write_csv(logit_csv, logit_rows)
-    figure_paths = _figures(output_dir, run_rows, logit_rows)
+    figure_paths = _figures(output_dir, run_rows, logit_rows, kd_label)
     analysis_path = output_dir / "logit_kd_analysis.json"
     analysis = {
         "status": "complete",
@@ -360,10 +479,14 @@ def main() -> None:
         "protocol_variant": protocol["protocol_variant"],
         "supervision_mode": supervision_mode(protocol),
         "method": "online exact logit-level KD with completion-only hard CE plus forward KL",
+        "context_mode": context_mode,
+        "teacher_context_field": protocol["kd"].get("teacher_context_field", "prompt"),
+        "student_context_field": protocol["kd"].get("student_context_field", "prompt"),
         "selected_alpha": alpha,
         "selected_temperature": temperature,
         "run_metrics": run_rows,
         "contrasts": contrasts,
+        "prompt_context_contrasts": prompt_context_contrasts,
         "logit_metrics": logit_rows,
         "conclusion": conclusion,
         "inputs": {
@@ -380,11 +503,13 @@ def main() -> None:
     write_json(analysis_path, analysis)
     report_path = output_dir / "experiment_report.md"
     lines = [
-        "# 7B-to-1.5B Logit Distillation Experiment",
+        "# 7B-to-1.5B Teacher-Prompt Logit Distillation Experiment",
         "",
-        "This is a revised single-seed GSM8K protocol and does not estimate training-seed variability.",
+        "This is a single-seed adaptive GSM8K prompt-context ablation and does not estimate training-seed variability.",
         "",
         f"Training supervision mode: {supervision_mode(protocol)}.",
+        "",
+        f"KD context mode: {context_mode}.",
         "",
         f"Selected shared hyperparameters: alpha={alpha:g}, temperature={temperature:g}.",
         "",
@@ -396,15 +521,35 @@ def main() -> None:
     for contrast in contrasts:
         budget_name = contrast["budget_name"]
         sft = next(row for row in run_rows if row["method"] == "SFT" and row["budget_name"] == budget_name)
-        kd = next(row for row in run_rows if row["method"] == "Logit KD" and row["budget_name"] == budget_name)
+        kd = next(row for row in run_rows if row["method"] == kd_label and row["budget_name"] == budget_name)
         lines.append(
             f"| {budget_name} | {sft['accuracy']:.4f} | {kd['accuracy']:.4f} | "
             f"{contrast['accuracy_delta']:+.4f} | {sft['budget_compliance']:.4f} | "
             f"{kd['budget_compliance']:.4f} | {contrast['mcnemar_holm_p_value']:.4g} |"
         )
+    if prompt_context_contrasts:
+        lines.extend(
+            [
+                "",
+                "## Teacher-prompt versus same-prompt KD",
+                "",
+                "| Budget | Accuracy delta | Compliance delta | Mean-token delta | Holm p |",
+                "|---|---:|---:|---:|---:|",
+            ]
+        )
+        for contrast in prompt_context_contrasts:
+            lines.append(
+                f"| {contrast['budget_name']} | "
+                f"{contrast['accuracy_delta_teacher_prompt_vs_same_prompt']:+.4f} | "
+                f"{contrast['budget_compliance_delta_teacher_prompt_vs_same_prompt']:+.4f} | "
+                f"{contrast['mean_output_token_delta_teacher_prompt_vs_same_prompt']:+.2f} | "
+                f"{contrast['mcnemar_holm_p_value']:.4g} |"
+            )
     lines.extend(["", "## Conclusion", "", conclusion["classification"], ""])
     report_path.write_text("\n".join(lines), encoding="utf-8")
     artifacts = [analysis_path, run_csv, contrast_csv, logit_csv, report_path, *figure_paths]
+    if prompt_context_contrasts:
+        artifacts.append(context_contrast_csv)
     artifact_manifest = output_dir / "analysis_artifact_manifest.json"
     write_json(
         artifact_manifest,

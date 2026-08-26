@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import copy
 import json
 import logging
 import sys
@@ -25,6 +24,7 @@ from length_budget_distill.factorial import (
 )
 from length_budget_distill.records import read_jsonl, trace_from_dict, write_jsonl
 from length_budget_distill.sft_format import trace_to_sft_record
+from length_budget_distill.math_mix import stable_mixed_sft_order, tag_sft_record
 
 
 Condition = Tuple[str, str]
@@ -111,7 +111,9 @@ def main() -> None:
     for generator_name, budget_name in conditions:
         condition = (generator_name, budget_name)
         math_equal_example_records = [
-            _tag_record(trace_to_sft_record(trace), "hendrycks_math", "math::")
+            tag_sft_record(
+                trace_to_sft_record(trace), source="hendrycks_math", id_prefix="math::"
+            )
             for trace in math_by_condition[condition]
         ]
         math_subset_seed = int(
@@ -130,7 +132,9 @@ def main() -> None:
                 f"target={math_equal_token_target} actual={math_subset_tokens} gap={math_gap}"
             )
         math_equal_token_records = [
-            _tag_record(trace_to_sft_record(trace), "hendrycks_math", "math::")
+            tag_sft_record(
+                trace_to_sft_record(trace), source="hendrycks_math", id_prefix="math::"
+            )
             for trace in math_subset
         ]
 
@@ -143,12 +147,12 @@ def main() -> None:
             if file_sha256(gsm_path) != gsm_run.get("train_sha256"):
                 raise ValueError(f"GSM8K SFT data hash mismatch: {gsm_path}")
             gsm_records = [
-                _tag_record(row, "gsm8k", "gsm8k::")
+                tag_sft_record(row, source="gsm8k", id_prefix="gsm8k::")
                 for row in read_jsonl(gsm_path)
             ]
             if len(gsm_records) != int(gsm_run["n"]):
                 raise ValueError(f"GSM8K SFT row-count mismatch: {gsm_path}")
-            combined = _stable_order(
+            combined = stable_mixed_sft_order(
                 [*gsm_records, *math_records],
                 config_hash=config_hash,
                 mode=mode,
@@ -259,34 +263,6 @@ def _index_gsm_runs(runs: Iterable[Mapping[str, Any]]) -> Dict[Tuple[str, str, s
     if set(indexed) != expected:
         raise ValueError(f"Missing/unexpected GSM8K 7B seed-17 runs: observed={sorted(indexed)}")
     return indexed
-
-
-def _tag_record(row: Mapping[str, Any], source: str, id_prefix: str) -> Dict[str, Any]:
-    tagged = copy.deepcopy(dict(row))
-    tagged["id"] = f"{id_prefix}{tagged['id']}"
-    metadata = dict(tagged.get("metadata", {}))
-    metadata["dataset_source"] = source
-    tagged["metadata"] = metadata
-    return tagged
-
-
-def _stable_order(
-    rows: Iterable[Mapping[str, Any]],
-    *,
-    config_hash: str,
-    mode: str,
-    budget_name: str,
-    seed: int,
-) -> List[Dict[str, Any]]:
-    output = [dict(row) for row in rows]
-    output.sort(
-        key=lambda row: canonical_sha256(
-            [config_hash, "mixed_sft_order", mode, budget_name, seed, str(row["id"])]
-        )
-    )
-    if len({str(row["id"]) for row in output}) != len(output):
-        raise ValueError(f"Duplicate mixed SFT record IDs for mode={mode} budget={budget_name}")
-    return output
 
 
 def _resolve_project_path(raw: str) -> Path:

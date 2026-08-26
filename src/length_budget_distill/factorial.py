@@ -54,14 +54,26 @@ def read_key_value_marker(path: str | Path) -> Dict[str, str]:
     return values
 
 
-def validated_adapter_evidence(path: str | Path) -> Dict[str, str] | None:
+def validated_adapter_evidence(path: str | Path) -> Dict[str, Any] | None:
+    """Validate either an SFT key-value marker or a logit-KD JSON marker."""
+
     root = Path(path)
     marker_path = root / "TRAIN_COMPLETE"
     adapter_config = root / "adapter_config.json"
     adapter_model = root / "adapter_model.safetensors"
     if not marker_path.is_file() or not adapter_config.is_file() or not adapter_model.is_file():
         return None
-    marker = read_key_value_marker(marker_path)
+    try:
+        marker = read_key_value_marker(marker_path)
+    except ValueError:
+        # Logit-KD adapters use a hash-bound JSON marker and train manifest.
+        # Import lazily to keep the generic factorial helpers lightweight.
+        from .logit_kd import validated_training_marker
+
+        try:
+            return validated_training_marker(root)
+        except (OSError, ValueError):
+            return None
     required_marker_fields = {
         "run_name",
         "seed",

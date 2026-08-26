@@ -113,6 +113,9 @@ def main() -> None:
         "config_file_sha256": file_sha256(config_path),
         "train_path": metrics["train_path"],
         "train_sha256": metrics["train_sha256"],
+        "context_mode": metrics["context_mode"],
+        "teacher_context_field": metrics["teacher_context_field"],
+        "student_context_field": metrics["student_context_field"],
         "source_sha256": {str(path.relative_to(PROJECT_ROOT)): file_sha256(path) for path in source_files},
     }
     published = publish_adapter(runtime_dir, publish_dir, evidence=evidence)

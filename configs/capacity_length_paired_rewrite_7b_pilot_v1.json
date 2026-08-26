@@ -1,0 +1,135 @@
+{
+  "experiment_name": "capacity_length_paired_rewrite_7b_pilot_v1",
+  "protocol_variant": "exploratory_single_seed_paired_structure_preserving_rewrite",
+  "scope": "GSM8K only",
+  "parent": {
+    "result_root": "results/capacity_length_factorial_seed17_v1/formal",
+    "completion_marker": "results/capacity_length_factorial_seed17_v1/formal/FORMAL_COMPLETE"
+  },
+  "dataset": {
+    "source": "hf_dataset",
+    "dataset_name": "openai/gsm8k",
+    "dataset_config": "main",
+    "split": "train",
+    "question_field": "question",
+    "answer_field": "answer",
+    "answer_format": "gsm8k",
+    "verifier": "gsm8k_numeric"
+  },
+  "paired_rewrite": {
+    "source_standard_path": "results/capacity_length_factorial_seed17_v1/formal/sft_data/equal_example/qwen2p5_7b__long_512.jsonl",
+    "source_standard_sha256": "bc910bd4972328293893688a9bfa1b535f3762cc11836ea24ba8c4f16bf5a338",
+    "source_direct_short_path": "results/capacity_length_factorial_seed17_v1/formal/sft_data/equal_example/qwen2p5_7b__short_128.jsonl",
+    "source_direct_short_sha256": "4328598f49f1d60ba75ae8cd3209675e198f95dc96b851001b71369956722bba",
+    "expected_records": 881,
+    "ratios": [
+      {
+        "name": "rewrite_65",
+        "ratio": 0.65,
+        "fallback_ratios": ["rewrite_80"]
+      },
+      {
+        "name": "rewrite_80",
+        "ratio": 0.8,
+        "fallback_ratios": []
+      }
+    ],
+    "num_candidates": 3,
+    "minimum_target_fraction": 0.75,
+    "base_seed": 20260824,
+    "batch_size": 16,
+    "generation_headroom_tokens": 32,
+    "absolute_generation_ceiling": 512
+  },
+  "rewriter": {
+    "backend": "vllm",
+    "model_name": "Qwen/Qwen2.5-7B-Instruct",
+    "tokenizer_name": "Qwen/Qwen2.5-7B-Instruct",
+    "dtype": "bfloat16",
+    "tensor_parallel_size": 1,
+    "trust_remote_code": false,
+    "llm_kwargs": {
+      "gpu_memory_utilization": 0.82,
+      "max_model_len": 4096,
+      "max_num_seqs": 32
+    }
+  },
+  "generation": {
+    "temperature": 0.4,
+    "top_p": 0.9,
+    "stop": ["<|im_end|>"]
+  },
+  "token_counter": {
+    "backend": "hf_tokenizer",
+    "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "trust_remote_code": false,
+    "tokenizer_kwargs": {
+      "cache_dir": "/mnt/beegfs/youyang7/.cache/huggingface/hub"
+    }
+  },
+  "student": {
+    "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "trust_remote_code": false,
+    "torch_dtype": "bfloat16",
+    "use_lora": true,
+    "lora": {
+      "r": 4,
+      "alpha": 16,
+      "dropout": 0.05,
+      "target_modules": "all-linear"
+    }
+  },
+  "training": {
+    "seed": 17,
+    "data_seed": 17,
+    "learning_rates": [0.000005, 0.00001, 0.00002],
+    "num_train_epochs": 2.0,
+    "snapshot_epochs": [0.5, 1.0, 2.0],
+    "per_device_train_batch_size": 16,
+    "gradient_accumulation_steps": 1,
+    "warmup_ratio": 0.03,
+    "max_grad_norm": 1.0,
+    "logging_steps": 1,
+    "save_strategy": "steps",
+    "save_steps": 0.25,
+    "save_total_limit": 4,
+    "bf16": true,
+    "gradient_checkpointing": true,
+    "max_length": 2048,
+    "completion_only_loss": true,
+    "assistant_only_loss": false,
+    "packing": false,
+    "report_to": "none"
+  },
+  "selection": {
+    "conditions": ["standard_original", "rewrite_80", "rewrite_65"],
+    "split": "train",
+    "start_index": 2000,
+    "limit": 1000,
+    "accuracy_tie_pp": 0.5,
+    "tie_breakers": ["lower_clip_rate", "fewer_epochs", "lower_learning_rate"]
+  },
+  "evaluation": {
+    "primary_max_new_tokens": 512,
+    "budget_sweep": [64, 96, 128, 192, 256, 512],
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "sampling_temperature": 0.7,
+    "sampling_top_p": 0.95,
+    "sampling_candidates": 4,
+    "batch_size": 32,
+    "confirmatory_split": "train",
+    "confirmatory_start_index": 3000,
+    "confirmatory_limit": 4473
+  },
+  "advancement_gate": {
+    "max_accuracy_drop_pp": 2.0,
+    "max_output_token_ratio": 0.8
+  },
+  "outputs": {
+    "result_root": "results/capacity_length_paired_rewrite_7b_pilot_v1",
+    "checkpoint_root": "checkpoints/capacity_length_paired_rewrite_7b_pilot_v1",
+    "figure_root": "figures/capacity_length_paired_rewrite_7b_pilot_v1"
+  }
+}

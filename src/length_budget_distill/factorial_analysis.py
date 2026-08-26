@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import random
 from statistics import mean
 from typing import Dict, Iterable, List, Mapping, Sequence
@@ -19,6 +20,42 @@ def holm_adjust(p_values: Sequence[float]) -> List[float]:
         running = max(running, candidate)
         adjusted[index] = running
     return adjusted
+
+
+def wilson_interval(
+    correct: int,
+    total: int,
+    z: float = 1.959963984540054,
+) -> tuple[float, float]:
+    """Return the two-sided Wilson score interval for a binomial proportion."""
+
+    if total <= 0:
+        return 0.0, 0.0
+    proportion = correct / total
+    denominator = 1.0 + z * z / total
+    center = (proportion + z * z / (2.0 * total)) / denominator
+    radius = (
+        z
+        * math.sqrt(
+            proportion * (1.0 - proportion) / total
+            + z * z / (4.0 * total * total)
+        )
+        / denominator
+    )
+    return max(0.0, center - radius), min(1.0, center + radius)
+
+
+def exact_mcnemar_p_value(left_only: int, right_only: int) -> float:
+    """Return the two-sided exact McNemar p-value for paired binary outcomes."""
+
+    discordant = int(left_only) + int(right_only)
+    if discordant == 0:
+        return 1.0
+    smaller = min(int(left_only), int(right_only))
+    tail = sum(math.comb(discordant, value) for value in range(smaller + 1)) / (
+        2**discordant
+    )
+    return min(1.0, 2.0 * tail)
 
 
 def paired_cluster_bootstrap(
@@ -87,4 +124,3 @@ def difference_in_differences_effects(
         )
         grouped.setdefault(problem_id, []).append(effect)
     return {problem_id: mean(values) for problem_id, values in grouped.items()}
-

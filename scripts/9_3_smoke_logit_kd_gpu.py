@@ -26,7 +26,7 @@ from length_budget_distill.logit_kd import (
     protocol_hash,
     resolve_project_path,
     runtime_metadata,
-    tokenize_completion_record,
+    tokenize_kd_record,
     validate_budget_dataset,
     write_json,
 )
@@ -65,7 +65,7 @@ def main() -> None:
     examples = []
     for budget_name in ("short_128", "long_512"):
         _path, rows = validate_budget_dataset(protocol, budget_name)
-        encoded_rows = [tokenize_completion_record(tokenizer, row, max_length) for row in rows]
+        encoded_rows = [tokenize_kd_record(protocol, tokenizer, row, max_length) for row in rows]
         examples.append((budget_name, max(encoded_rows, key=lambda item: item["completion_token_count"])))
     torch.cuda.reset_peak_memory_stats()
     records = []
@@ -73,11 +73,24 @@ def main() -> None:
     optimizer.zero_grad(set_to_none=True)
     last_snapshot = None
     for budget_name, encoded in examples:
-        input_ids = torch.tensor([encoded["input_ids"]], dtype=torch.long, device="cuda")
+        teacher_input_ids = torch.tensor(
+            [encoded["teacher_input_ids"]], dtype=torch.long, device="cuda"
+        )
+        student_input_ids = torch.tensor(
+            [encoded["student_input_ids"]], dtype=torch.long, device="cuda"
+        )
         targets = torch.tensor(encoded["target_ids"], dtype=torch.long, device="cuda")
         with torch.inference_mode():
-            teacher_logits = causal_completion_logits(teacher, input_ids, encoded["prompt_token_count"])
-        student_logits = causal_completion_logits(student, input_ids, encoded["prompt_token_count"])
+            teacher_logits = causal_completion_logits(
+                teacher,
+                teacher_input_ids,
+                encoded["teacher_prompt_token_count"],
+            )
+        student_logits = causal_completion_logits(
+            student,
+            student_input_ids,
+            encoded["student_prompt_token_count"],
+        )
         loss, metrics = hybrid_kd_loss(
             student_logits,
             teacher_logits,
@@ -97,7 +110,11 @@ def main() -> None:
             {
                 "budget_name": budget_name,
                 "record_id": encoded["record_id"],
-                "sequence_tokens": len(encoded["input_ids"]),
+                "context_mode": encoded["context_mode"],
+                "teacher_sequence_tokens": len(encoded["teacher_input_ids"]),
+                "student_sequence_tokens": len(encoded["student_input_ids"]),
+                "teacher_prompt_tokens": encoded["teacher_prompt_token_count"],
+                "student_prompt_tokens": encoded["student_prompt_token_count"],
                 "completion_tokens": encoded["completion_token_count"],
                 "loss": float(metrics["loss"]),
                 "ce": float(metrics["ce"]),

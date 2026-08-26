@@ -25,7 +25,13 @@ from length_budget_distill.factorial import (
     stable_generation_seed,
     validated_adapter_evidence,
 )
-from length_budget_distill.factorial_analysis import holm_adjust, paired_cluster_bootstrap, paired_problem_effects
+from length_budget_distill.factorial_analysis import (
+    exact_mcnemar_p_value,
+    holm_adjust,
+    paired_cluster_bootstrap,
+    paired_problem_effects,
+    wilson_interval,
+)
 from length_budget_distill.records import ProblemRecord, TraceRecord, trace_from_dict, trace_to_dict
 from length_budget_distill.sft_format import trace_to_sft_record
 from length_budget_distill.student_prompts import build_student_math_prompt
@@ -167,6 +173,37 @@ class CapacityLengthFactorialTest(unittest.TestCase):
             model_path.write_bytes(b"changed")
             self.assertIsNone(validated_adapter_evidence(root))
 
+    def test_adapter_completion_evidence_accepts_logit_kd_json_marker(self) -> None:
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            config_path = root / "adapter_config.json"
+            model_path = root / "adapter_model.safetensors"
+            metrics_path = root / "training_metrics.json"
+            manifest_path = root / "train_manifest.json"
+            config_path.write_text("{}\n", encoding="utf-8")
+            model_path.write_bytes(b"weights")
+            metrics_path.write_text("{}\n", encoding="utf-8")
+            manifest = {"run_name": "logit-kd-fixture", "status": "complete"}
+            manifest_path.write_text(
+                json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            marker = {
+                **manifest,
+                "train_manifest_sha256": file_sha256(manifest_path),
+                "adapter_config_sha256": file_sha256(config_path),
+                "adapter_model_sha256": file_sha256(model_path),
+                "training_metrics_sha256": file_sha256(metrics_path),
+            }
+            (root / "TRAIN_COMPLETE").write_text(
+                json.dumps(marker, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            evidence = validated_adapter_evidence(root)
+            self.assertIsNotNone(evidence)
+            self.assertEqual(evidence["run_name"], "logit-kd-fixture")
+
     def test_holm_and_paired_bootstrap_detect_positive_effect(self) -> None:
         adjusted = holm_adjust([0.01, 0.04, 0.03])
         self.assertEqual(len(adjusted), 3)
@@ -177,6 +214,13 @@ class CapacityLengthFactorialTest(unittest.TestCase):
         result = paired_cluster_bootstrap(effects, samples=200, seed=9)
         self.assertEqual(result["estimate"], 1.0)
         self.assertEqual(result["ci_low"], 1.0)
+
+    def test_shared_binomial_intervals_and_exact_mcnemar(self) -> None:
+        lower, upper = wilson_interval(50, 100)
+        self.assertLess(lower, 0.5)
+        self.assertGreater(upper, 0.5)
+        self.assertEqual(exact_mcnemar_p_value(0, 0), 1.0)
+        self.assertAlmostEqual(exact_mcnemar_p_value(5, 0), 0.0625)
 
     def test_local_end_to_end_generation_selection_and_dataset_build(self) -> None:
         with TemporaryDirectory() as tmpdir:

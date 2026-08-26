@@ -43,6 +43,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--stage", choices=["smoke", "pilot", "formal"], required=True)
     parser.add_argument("--expected-problems", type=int, required=True)
+    parser.add_argument(
+        "--generator-name",
+        default=None,
+        help="Restrict the audit/common-support matrix to one configured generator.",
+    )
     return parser.parse_args()
 
 
@@ -55,6 +60,15 @@ def main() -> None:
     configured_verifier = verifier_name(config)
     num_candidates = int(config.get("generation", {}).get("num_candidates", 3))
     conditions = expected_conditions(config)
+    if args.generator_name is not None:
+        configured_generators = {condition[0] for condition in conditions}
+        if args.generator_name not in configured_generators:
+            raise ValueError(
+                f"Unknown generator {args.generator_name!r}; configured={sorted(configured_generators)}"
+            )
+        conditions = [
+            condition for condition in conditions if condition[0] == args.generator_name
+        ]
     if not conditions:
         raise ValueError("No factorial conditions were configured.")
 
@@ -103,6 +117,17 @@ def main() -> None:
     mismatched_hashes = sorted({trace.config_hash for trace in traces if trace.config_hash != config_hash})
     if mismatched_hashes:
         raise ValueError(f"Trace/config hash mismatch: expected={config_hash} observed={mismatched_hashes}")
+    expected_condition_set = set(conditions)
+    observed_condition_set = {
+        (str(trace.generator_name or trace.teacher_model), trace.budget_name)
+        for trace in traces
+    }
+    unexpected_conditions = observed_condition_set - expected_condition_set
+    if unexpected_conditions:
+        raise ValueError(
+            "Raw shards contain conditions outside the requested audit scope: "
+            f"{sorted(unexpected_conditions)}"
+        )
 
     audit_rows = candidate_audit_rows(traces, conditions)
     expected_per_condition = args.expected_problems * num_candidates
@@ -174,6 +199,7 @@ def main() -> None:
         "selected_trace_count": len(selected),
         "common_problem_count": len(common_ids),
         "minimum_common_problem_count": minimum_common,
+        "generator_name": args.generator_name,
         "conditions": audit_rows,
         "merged_path": str(merged_path),
         "merged_sha256": file_sha256(merged_path),

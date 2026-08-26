@@ -403,3 +403,50 @@ manifest and completion marker with SHA256 evidence; partial shards and queued
 jobs are not results. Final analysis reports teacher pass@3/candidate quality
 separately from downstream student accuracy and writes publication-oriented
 capacity-by-length figures.
+
+## Multi-Benchmark, Multi-Teacher Logit-KD Pilot
+
+The exploratory extension in
+`docs/capacity_length_multibench_multiteacher_kd_pilot_protocol.md` crosses the
+existing four Qwen2.5 teacher capacities and three trajectory lengths while
+training on globally equal-token GSM8K+MATH supervision. It reuses the completed
+7B MATH trajectories, generates only the missing 1.5B/3B/14B MATH trajectories,
+and compares 12 matched SFT adapters with 12 matched-teacher online logit-KD
+adapters. KD alpha and temperature are inherited from the completed 7B
+equal-token GSM8K KD selection rather than tuned on the multi-benchmark suite.
+
+Dry-run the three dependent DAG submissions with:
+
+```bash
+DRY_RUN=1 UPSTREAM_KD_AUDIT_JOB=<job> \
+  bash scripts/13_0_submit_multiteacher_trace_build.sh
+DRY_RUN=1 BUILD_JOB_ID=<job> \
+  bash scripts/13_0_submit_multiteacher_kd_train_eval.sh
+DRY_RUN=1 EVAL_JOB_IDS=<job0>:<job1> \
+  bash scripts/13_0_submit_multiteacher_analysis_audit.sh
+```
+
+The pilot remains single-seed exploratory evidence. A root `PILOT_COMPLETE`
+marker is written only after all 12 datasets, 24 adapters, 75 evaluation
+artifacts, analysis figures, and their hashes pass an independent audit.
+
+## 7B Teacher-Prompt Logit-KD Ablation
+
+The controlled diagnostic in
+`docs/capacity_length_logit_kd_teacher_prompt_protocol.md` keeps the student on
+the ordinary budget-blind prompt while conditioning the 7B teacher logits on
+the registered 128/256/512-token teacher prompts. It reuses the immutable 7B
+equal-token completions and trains three separate student adapters. A new 3x3
+alpha/temperature validation sweep is protected by a hard two-percentage-point
+compliance margin; no feasible candidate means the formal chain stops.
+
+Preview the independent DAG with:
+
+```bash
+DRY_RUN=1 KD_NODES=c32,c31 KD_PARTITIONS=a5000ada,a6000 \
+  bash scripts/15_0_submit_teacher_prompt_logit_kd.sh
+```
+
+This is a single-seed adaptive GSM8K prompt-context ablation, not new
+confirmatory evidence. Existing same-prompt KD and multi-benchmark roots are not
+modified.

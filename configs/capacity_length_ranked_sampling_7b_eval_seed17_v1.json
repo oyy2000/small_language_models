@@ -1,0 +1,62 @@
+{
+  "experiment_name": "capacity_length_ranked_sampling_7b_eval_seed17_v1",
+  "protocol_variant": "revised_formal_single_seed_ranked_length_evaluation",
+  "parent_training": {
+    "config_path": "configs/capacity_length_ranked_sampling_7b_training_seed17_v1.json",
+    "canonical_config_sha256": "125dcf1b8c5a992f0f42e8c15eb8e56edef6fcbca660a3fbce07fa918082b561",
+    "config_file_sha256": "47c8797678de3ca0914d4f9ed7b6fe01aea9f5d4704d6fedd52ac40aadb9e8ec",
+    "input_manifest_path": "results/capacity_length_ranked_sampling_7b_v1/formal/training/input/dataset_manifest.json",
+    "input_manifest_sha256": "d5ae3204f1f33e28643bdd78394de486eaa152b49db92a24905c7492ad8e6717",
+    "launch_manifest_path": "results/capacity_length_ranked_sampling_7b_v1/formal/training/training_manifest_shard_00_of_01.json",
+    "launch_manifest_sha256": "16b5cbf567a1550e505f956df05cca351d30f28cf7da655671655ec482058820",
+    "audit_path": "results/capacity_length_ranked_sampling_7b_v1/formal/training/audit/training_audit.json",
+    "audit_sha256": "db1b09207d03886f3d58e26c22299b83e05df87322434bb63620771f71e26a43",
+    "completion_marker_path": "results/capacity_length_ranked_sampling_7b_v1/formal/training/audit/TRAINING_COMPLETE",
+    "completion_marker_sha256": "778b3a2a7cac6f098b18c09f6376377763bd70c6604ad6f5da62c39d053f2fdf"
+  },
+  "dataset": {
+    "source": "hf_dataset",
+    "dataset_name": "openai/gsm8k",
+    "dataset_config": "main",
+    "question_field": "question",
+    "answer_field": "answer",
+    "answer_format": "gsm8k"
+  },
+  "student": {
+    "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "torch_dtype": "bfloat16"
+  },
+  "evaluation": {
+    "dataset_split": "test",
+    "start_index": 50,
+    "limit": 1269,
+    "max_new_tokens": 512,
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "batch_size": 32,
+    "include_base_model": true,
+    "expected_adapter_count": 3,
+    "expected_run_count": 4,
+    "max_parallel": 3
+  },
+  "analysis": {
+    "familywise_alpha": 0.05,
+    "bootstrap_samples": 10000,
+    "primary_family": [
+      "relative_short__vs__relative_medium",
+      "relative_medium__vs__relative_long",
+      "relative_short__vs__relative_long"
+    ],
+    "secondary_family": [
+      "relative_short__vs__base",
+      "relative_medium__vs__base",
+      "relative_long__vs__base"
+    ],
+    "evidence_level": "revised_formal_single_seed",
+    "scope": "GSM8K test[50:1319] only"
+  },
+  "outputs": {
+    "result_root": "results/capacity_length_ranked_sampling_7b_v1",
+    "figure_root": "figures/capacity_length_ranked_sampling_7b_v1"
+  }
+}

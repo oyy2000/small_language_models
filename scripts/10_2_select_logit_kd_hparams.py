@@ -17,6 +17,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from length_budget_distill.logit_kd import (
+    compliance_gate_satisfied,
     file_sha256,
     kd_run_name,
     load_protocol,
@@ -64,8 +65,13 @@ def main() -> None:
     eval_root = validation_root / "eval"
     output_path = validation_root / "selection.json"
     marker_path = validation_root / "VALIDATION_COMPLETE"
-    if output_path.exists() or marker_path.exists():
+    blocked_marker_path = validation_root / "VALIDATION_BLOCKED"
+    if output_path.exists() or marker_path.exists() or blocked_marker_path.exists():
         raise FileExistsError(f"Validation selection already exists: {output_path}")
+    max_compliance_drop = float(protocol["validation"].get("max_compliance_drop", 0.0))
+    require_feasible = bool(protocol["validation"].get("require_feasible_candidate", False))
+    if not 0.0 <= max_compliance_drop <= 1.0:
+        raise ValueError("validation.max_compliance_drop must lie in [0, 1].")
 
     sft_metrics: Dict[str, Dict[str, float]] = {}
     rows: List[Dict[str, Any]] = []
@@ -105,7 +111,7 @@ def main() -> None:
                     }
                 )
             deltas = [values["accuracy_delta_vs_sft"] for values in per_budget.values()]
-            feasible = all(values["compliance_delta_vs_sft"] >= 0 for values in per_budget.values())
+            feasible = compliance_gate_satisfied(per_budget, max_compliance_drop)
             candidates.append(
                 {
                     "alpha": float(alpha),
@@ -118,6 +124,41 @@ def main() -> None:
                 }
             )
     feasible_candidates = [candidate for candidate in candidates if candidate["budget_compliance_feasible"]]
+    selection_rule = [
+        f"restrict_to_candidates_with_compliance_drop_at_most_{max_compliance_drop:g}_in_every_budget",
+        "maximize_minimum_accuracy_delta",
+        "maximize_macro_accuracy_delta",
+        "minimize_mean_training_kl",
+        "prefer_lower_alpha_then_lower_temperature",
+    ]
+    if require_feasible and not feasible_candidates:
+        blocked_payload = {
+            "status": "blocked_no_feasible_candidate",
+            "protocol_hash": protocol_hash(protocol),
+            "selection_split": protocol["validation"],
+            "selection_rule": selection_rule,
+            "max_compliance_drop": max_compliance_drop,
+            "budget_compliance_constraint_satisfied": False,
+            "source_sha256": {
+                "scripts/10_2_select_logit_kd_hparams.py": file_sha256(Path(__file__).resolve())
+            },
+            "sft_metrics": sft_metrics,
+            "candidates": candidates,
+        }
+        write_json(output_path, blocked_payload)
+        write_json(
+            blocked_marker_path,
+            {
+                "status": "blocked_no_feasible_candidate",
+                "protocol_hash": protocol_hash(protocol),
+                "selection_sha256": file_sha256(output_path),
+                "max_compliance_drop": max_compliance_drop,
+            },
+        )
+        raise SystemExit(
+            "No KD hyperparameter candidate satisfied the registered compliance gate: "
+            f"{blocked_marker_path}"
+        )
     pool = feasible_candidates or candidates
     selected = max(
         pool,
@@ -133,13 +174,8 @@ def main() -> None:
         "status": "complete",
         "protocol_hash": protocol_hash(protocol),
         "selection_split": protocol["validation"],
-        "selection_rule": [
-            "restrict_to_candidates_with_non-decreasing_budget_compliance_in_all_budgets_when_any exist",
-            "maximize_minimum_accuracy_delta",
-            "maximize_macro_accuracy_delta",
-            "minimize_mean_training_kl",
-            "prefer_lower_alpha_then_lower_temperature",
-        ],
+        "selection_rule": selection_rule,
+        "max_compliance_drop": max_compliance_drop,
         "budget_compliance_constraint_satisfied": bool(feasible_candidates),
         "source_sha256": {
             "scripts/10_2_select_logit_kd_hparams.py": file_sha256(Path(__file__).resolve())

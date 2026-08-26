@@ -40,6 +40,8 @@
 
 - Approved machines are C30, C31, C32, and C49.
 - Keep `grabgpu` allocations open unless the user explicitly asks to close them.
+- On C49, `/home/youyang7/bin/gg` processes launched by the user's active `grabgpu` allocation are GPU keepalive/occupancy processes, not competing workloads. Do not require low utilization or near-zero used memory on C49: a GPU is available whenever its remaining free memory is sufficient for the workload's expected peak allocation plus a safety margin. Ignore `gg` utilization when deciding availability and account for its memory only by subtracting it from the available capacity.
+- Do not terminate the C49 `gg` processes or close their allocation. Run project workloads inside the existing C49 allocation with `srun --jobid=<allocation> --overlap`; continue to identify non-`gg` GPU processes before launch and include their memory in the free-capacity calculation without interfering with them.
 - Inspect `nvidia-smi` before every launch. Never terminate or interfere with another process or allocation.
 - Slurm `Gres=(null)` and `--exclusive` do not prove GPU isolation on these nodes; verify physical GPU occupancy directly.
 - On oversubscribed partitions, use the shared stable-idle-GPU gate in `scripts/slurm/_gpu_idle_gate.sh`; CPU sharing is permitted only after selecting GPUs with low memory use and utilization across repeated checks.

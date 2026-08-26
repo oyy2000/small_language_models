@@ -19,6 +19,8 @@ from length_budget_distill.math_mix import (
     diagnose_common_support_selection,
     normalized_question_sha256,
     proportional_stratified_sample,
+    stable_mixed_sft_order,
+    tag_sft_record,
 )
 from length_budget_distill.verifiers import (
     extract_last_boxed,
@@ -93,6 +95,38 @@ class MathMixPilotTest(unittest.TestCase):
         self.assertEqual(diagnosis["retention_by_level"][1]["retention_rate"], 0.0)
         self.assertEqual(diagnosis["question_hash_overlap"]["source_vs_evaluation"], 0)
 
+    def test_source_tagging_and_mixed_order_are_namespaced_and_stable(self) -> None:
+        source = {
+            "id": "row-1",
+            "metadata": {"problem_id": "problem-1"},
+            "messages": [{"role": "user", "content": "question"}],
+        }
+        tagged = tag_sft_record(source, source="gsm8k", id_prefix="gsm8k::")
+        self.assertEqual(tagged["id"], "gsm8k::row-1")
+        self.assertEqual(tagged["metadata"]["dataset_source"], "gsm8k")
+        self.assertEqual(source["id"], "row-1")
+        rows = [
+            tagged,
+            tag_sft_record(source, source="hendrycks_math", id_prefix="math::"),
+        ]
+        first = stable_mixed_sft_order(
+            rows,
+            config_hash="config",
+            mode="equal_token",
+            generator_name="qwen2p5_3b",
+            budget_name="medium_256",
+            seed=17,
+        )
+        second = stable_mixed_sft_order(
+            reversed(rows),
+            config_hash="config",
+            mode="equal_token",
+            generator_name="qwen2p5_3b",
+            budget_name="medium_256",
+            seed=17,
+        )
+        self.assertEqual(first, second)
+
     def test_pilot_overlay_is_bound_and_cardinalities_are_locked(self) -> None:
         config_path = PROJECT_ROOT / "configs/capacity_length_math_mix_pilot_v1.json"
         overlay_path = PROJECT_ROOT / "configs/capacity_length_math_mix_pilot_sft_v1.json"
@@ -108,6 +142,25 @@ class MathMixPilotTest(unittest.TestCase):
             sum(config["evaluation_suite"][name]["sample_count"] for name in ("gsm8k", "math500", "aime2025")),
             330,
         )
+
+    def test_multiteacher_multibench_config_reuses_registered_axes(self) -> None:
+        config_path = (
+            PROJECT_ROOT
+            / "configs/capacity_length_multibench_multiteacher_kd_pilot_v1.json"
+        )
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            [generator["name"] for generator in config["generators"]],
+            ["qwen2p5_1p5b", "qwen2p5_3b", "qwen2p5_7b", "qwen2p5_14b"],
+        )
+        self.assertEqual(
+            [budget["max_solution_tokens"] for budget in config["length_budgets"]],
+            [128, 256, 512],
+        )
+        self.assertEqual(config["generation"]["num_candidates"], 3)
+        self.assertEqual(config["balancing"]["training_seeds"], [17])
+        self.assertEqual(config["balancing"]["supervision_mode"], "equal_token")
+        self.assertTrue(config["kd"]["train_hard_ce_baseline"])
 
 
 if __name__ == "__main__":

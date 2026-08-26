@@ -1,0 +1,147 @@
+{
+  "experiment_name": "capacity_length_opd_prompt_pilot_v1",
+  "protocol_variant": "exploratory_single_seed_dual_context_pure_sampled_token_opd",
+  "evidence_level": "exploratory_single_seed_pilot",
+  "scope": "GSM8K only",
+  "arms": [
+    "standard_prompt",
+    "bounded_concise_prompt"
+  ],
+  "dataset": {
+    "source": "hf_dataset",
+    "dataset_name": "openai/gsm8k",
+    "dataset_config": "main",
+    "question_field": "question",
+    "answer_field": "answer",
+    "answer_format": "gsm8k",
+    "verifier": "gsm8k_numeric"
+  },
+  "splits": {
+    "calibration": {
+      "dataset_split": "train",
+      "start_index": 2000,
+      "limit": 500,
+      "role": "smoke_and_preflight_only"
+    },
+    "training": {
+      "dataset_split": "train",
+      "start_index": 3000,
+      "limit": 3500,
+      "role": "unlabeled_opd_prompts"
+    },
+    "primary_evaluation": {
+      "dataset_split": "train",
+      "start_index": 6500,
+      "limit": 973,
+      "role": "disjoint_primary_pilot_evaluation"
+    },
+    "secondary_evaluation": {
+      "dataset_split": "test",
+      "start_index": 50,
+      "limit": 1269,
+      "role": "secondary_adaptive_comparison_only"
+    }
+  },
+  "models": {
+    "teacher": {
+      "model_name": "Qwen/Qwen2.5-7B-Instruct",
+      "revision": "a09a35458c702b33eeacc393d103063234e8bc28",
+      "torch_dtype": "bfloat16"
+    },
+    "student": {
+      "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+      "revision": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+      "torch_dtype": "bfloat16",
+      "use_lora": true,
+      "lora": {
+        "r": 4,
+        "alpha": 16,
+        "dropout": 0.05,
+        "target_modules": "all-linear"
+      }
+    },
+    "tokenizer": {
+      "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+      "revision": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+      "expected_length": 151665,
+      "expected_tokenizer_json_sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539"
+    }
+  },
+  "reference_generation": {
+    "decoding": "greedy",
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "max_new_tokens": 512,
+    "batch_size": 16,
+    "num_shards": 3
+  },
+  "concise_prompt": {
+    "scheme": "paired_relative_band_from_frozen_base_standard_greedy_length",
+    "lower_ratio": 0.70,
+    "upper_ratio": 0.90,
+    "minimum_tokens": 96,
+    "maximum_tokens": 256,
+    "correct_complete_reasoning_has_priority": true
+  },
+  "objective": {
+    "name": "sampled_token_reverse_kl_ppo_clipped",
+    "teacher_context_mode": "common_standard_prompt",
+    "loss_aggregation": "token_mean",
+    "clip_ratio": 0.2,
+    "scalar_teacher_reward": false,
+    "correctness_reward": false,
+    "length_reward": false,
+    "hard_ce_loss": false,
+    "value_head": false
+  },
+  "training": {
+    "seed": 17,
+    "generation_seed": 20260826,
+    "num_epochs": 1,
+    "prompts_per_batch": 16,
+    "rollouts_per_prompt": 4,
+    "mini_batch_rollouts": 8,
+    "sampling_temperature": 1.0,
+    "top_p": 1.0,
+    "max_new_tokens": 512,
+    "learning_rate": 0.000001,
+    "warmup_ratio": 0.03,
+    "max_grad_norm": 1.0,
+    "gradient_checkpointing": true,
+    "max_length": 2048,
+    "report_to": "none"
+  },
+  "preflight": {
+    "prompt_count": 100,
+    "num_shards": 2,
+    "minimum_concise_in_band_rate": 0.70,
+    "require_finite_teacher_signal": true,
+    "stop_training_on_failure": true
+  },
+  "diagnostics": {
+    "top_k": 64,
+    "top_k_rollouts": 2,
+    "correctness_is_diagnostic_only": true,
+    "length_is_diagnostic_only": true
+  },
+  "evaluation": {
+    "prompt_mode": "common_standard_prompt",
+    "max_new_tokens": 512,
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "batch_size": 32,
+    "bootstrap_samples": 10000,
+    "bootstrap_seed": 17017
+  },
+  "advancement_gate": {
+    "accuracy_noninferiority_margin_pp": 1.0,
+    "maximum_mean_output_token_ratio": 0.90,
+    "maximum_extraction_failure_increase_pp": 1.0,
+    "maximum_truncation_increase_pp": 1.0
+  },
+  "outputs": {
+    "result_root": "results/capacity_length_opd_prompt_pilot_v1",
+    "checkpoint_root": "checkpoints/capacity_length_opd_prompt_pilot_v1",
+    "figure_root": "figures/capacity_length_opd_prompt_pilot_v1"
+  }
+}

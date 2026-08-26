@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import math
@@ -22,6 +23,56 @@ def normalized_question_sha256(question: str) -> str:
 def stable_rank(seed: int, *parts: object) -> str:
     payload = json.dumps([int(seed), *parts], ensure_ascii=False, separators=(",", ":"))
     return stable_text_sha256(payload)
+
+
+def tag_sft_record(
+    row: Mapping[str, Any],
+    *,
+    source: str,
+    id_prefix: str,
+) -> Dict[str, Any]:
+    """Deep-copy and namespace one SFT row while recording its benchmark source."""
+
+    tagged = copy.deepcopy(dict(row))
+    tagged["id"] = f"{id_prefix}{tagged['id']}"
+    metadata = dict(tagged.get("metadata", {}))
+    metadata["dataset_source"] = source
+    tagged["metadata"] = metadata
+    return tagged
+
+
+def stable_mixed_sft_order(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    config_hash: str,
+    mode: str,
+    budget_name: str,
+    seed: int,
+    generator_name: str | None = None,
+) -> List[Dict[str, Any]]:
+    """Return a deterministic source-mixed order and reject duplicate namespaced IDs."""
+
+    output = [dict(row) for row in rows]
+    identity_prefix: List[object] = [config_hash, "mixed_sft_order", mode]
+    if generator_name is not None:
+        identity_prefix.append(generator_name)
+    identity_prefix.extend([budget_name, seed])
+    output.sort(
+        key=lambda row: stable_text_sha256(
+            json.dumps(
+                [*identity_prefix, str(row["id"])],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+    )
+    if len({str(row["id"]) for row in output}) != len(output):
+        raise ValueError(
+            "Duplicate mixed SFT record IDs for "
+            f"generator={generator_name} mode={mode} budget={budget_name}"
+        )
+    return output
 
 
 def parse_math_level(value: object) -> int:

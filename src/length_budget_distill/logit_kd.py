@@ -77,6 +77,9 @@ def load_protocol(path: str | Path) -> Dict[str, Any]:
         raise ValueError("The registered KD protocol is restricted to seed 17.")
     if not bool(protocol["kd"].get("completion_only")):
         raise ValueError("The registered KD protocol requires completion-only loss.")
+    student_context_field, teacher_context_field, context_mode = kd_context_fields(protocol)
+    if context_mode == "dual_prompt_teacher_forced" and student_context_field == teacher_context_field:
+        raise ValueError("Dual-prompt KD requires distinct teacher and student context fields.")
     mode = supervision_mode(protocol)
     if mode not in {"equal_example", "equal_token"}:
         raise ValueError(f"Unsupported KD supervision mode: {mode}")
@@ -106,6 +109,22 @@ def supervision_mode(protocol: Mapping[str, Any]) -> str:
     return str(supervision.get("mode", "equal_example"))
 
 
+def kd_context_fields(protocol: Mapping[str, Any]) -> Tuple[str, str, str]:
+    """Return registered student/teacher context fields with v1 compatibility."""
+
+    kd = protocol.get("kd", {})
+    if not isinstance(kd, Mapping):
+        raise ValueError("KD settings must be a JSON object.")
+    student_field = str(kd.get("student_context_field", "prompt"))
+    teacher_field = str(kd.get("teacher_context_field", student_field))
+    mode = str(kd.get("context_mode", "same_prompt_teacher_forced"))
+    if mode not in {"same_prompt_teacher_forced", "dual_prompt_teacher_forced"}:
+        raise ValueError(f"Unsupported KD context mode: {mode}")
+    if not student_field or not teacher_field:
+        raise ValueError("KD context fields must be non-empty strings.")
+    return student_field, teacher_field, mode
+
+
 def baseline_sft_run_name(protocol: Mapping[str, Any], budget_name: str) -> str:
     if budget_name not in protocol["budgets"]:
         raise ValueError(f"Unknown budget: {budget_name}")
@@ -123,6 +142,23 @@ def float_slug(value: float) -> str:
 
 def kd_run_name(budget_name: str, alpha: float, temperature: float) -> str:
     return f"{budget_name}__a{float_slug(alpha)}__t{float_slug(temperature)}__seed_17"
+
+
+def compliance_gate_satisfied(
+    per_budget: Mapping[str, Mapping[str, Any]],
+    max_compliance_drop: float,
+) -> bool:
+    """Return whether every budget stays within the registered compliance margin."""
+
+    margin = float(max_compliance_drop)
+    if not 0.0 <= margin <= 1.0:
+        raise ValueError("max_compliance_drop must lie in [0, 1].")
+    if not per_budget:
+        raise ValueError("Compliance gating requires at least one budget.")
+    return all(
+        float(values["compliance_delta_vs_sft"]) >= -margin - 1e-12
+        for values in per_budget.values()
+    )
 
 
 def validate_budget_dataset(protocol: Mapping[str, Any], budget_name: str) -> Tuple[Path, List[Dict[str, Any]]]:
@@ -144,28 +180,74 @@ def validate_budget_dataset(protocol: Mapping[str, Any], budget_name: str) -> Tu
         )
     seen = set()
     solution_token_total = 0
+    expected_budget_name = str(budget.get("budget_name", budget_name))
+    expected_generator_name = str(budget.get("expected_generator_name", "qwen2p5_7b"))
+    expected_dataset_sources = {
+        str(value) for value in budget.get("expected_dataset_sources", [])
+    }
+    observed_source_counts: Dict[str, int] = {}
+    observed_source_tokens: Dict[str, int] = {}
+    student_context_field, teacher_context_field, context_mode = kd_context_fields(protocol)
     for row in rows:
         record_id = str(row.get("id"))
         if not record_id or record_id in seen:
             raise ValueError(f"Missing or duplicate KD record id in {path}: {record_id!r}")
         seen.add(record_id)
         metadata = row.get("metadata", {})
-        if metadata.get("budget_name") != budget_name:
+        if metadata.get("budget_name") != expected_budget_name:
             raise ValueError(f"KD record budget mismatch: {record_id}")
-        if metadata.get("generator_name") != "qwen2p5_7b":
-            raise ValueError(f"KD record does not come from the registered 7B teacher: {record_id}")
+        if metadata.get("generator_name") != expected_generator_name:
+            raise ValueError(
+                "KD record does not come from the registered condition teacher "
+                f"{expected_generator_name}: {record_id}"
+            )
         if not bool(metadata.get("is_correct")) or not bool(metadata.get("budget_compliant")):
             raise ValueError(f"KD record is not verified-correct and budget-compliant: {record_id}")
+        for context_field in {student_context_field, teacher_context_field}:
+            if not str(row.get(context_field, "")).strip():
+                raise ValueError(f"KD record is missing context field {context_field!r}: {record_id}")
+        if context_mode == "dual_prompt_teacher_forced":
+            max_solution_tokens = int(budget["max_solution_tokens"])
+            budget_marker = f"Length budget: solve in <= {max_solution_tokens} solution tokens."
+            teacher_context = str(row[teacher_context_field])
+            student_context = str(row[student_context_field])
+            if budget_marker not in teacher_context:
+                raise ValueError(f"KD teacher context has the wrong length budget: {record_id}")
+            if "Length budget:" in student_context:
+                raise ValueError(f"KD student context unexpectedly exposes the length budget: {record_id}")
         try:
-            solution_token_total += int(metadata["solution_token_count"])
+            solution_tokens = int(metadata["solution_token_count"])
+            solution_token_total += solution_tokens
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError(f"KD record has invalid solution_token_count: {record_id}") from exc
+        if expected_dataset_sources:
+            dataset_source = str(metadata.get("dataset_source", ""))
+            if dataset_source not in expected_dataset_sources:
+                raise ValueError(f"KD record has an unexpected dataset source: {record_id}")
+            observed_source_counts[dataset_source] = observed_source_counts.get(dataset_source, 0) + 1
+            observed_source_tokens[dataset_source] = (
+                observed_source_tokens.get(dataset_source, 0) + solution_tokens
+            )
     if "expected_solution_tokens" in budget:
         expected_tokens = int(budget["expected_solution_tokens"])
         if solution_token_total != expected_tokens:
             raise ValueError(
                 f"KD solution-token total mismatch for {budget_name}: "
                 f"expected={expected_tokens} actual={solution_token_total}"
+            )
+    for field, observed in (
+        ("expected_source_counts", observed_source_counts),
+        ("expected_source_solution_tokens", observed_source_tokens),
+    ):
+        if field not in budget:
+            continue
+        expected_source_values = {
+            str(key): int(value) for key, value in budget[field].items()
+        }
+        if observed != expected_source_values:
+            raise ValueError(
+                f"KD per-source evidence mismatch for {budget_name}/{field}: "
+                f"expected={expected_source_values} actual={observed}"
             )
     return path, rows
 
@@ -227,11 +309,19 @@ def load_and_validate_tokenizers(protocol: Mapping[str, Any]) -> Tuple[Any, Any,
     return student_tokenizer, teacher_tokenizer, valid_vocab_size, evidence
 
 
-def tokenize_completion_record(tokenizer: Any, row: Mapping[str, Any], max_length: int) -> Dict[str, Any]:
-    prompt = str(row.get("prompt", ""))
+def _tokenize_prompt_completion(
+    tokenizer: Any,
+    row: Mapping[str, Any],
+    max_length: int,
+    *,
+    prompt_field: str,
+) -> Dict[str, Any]:
+    prompt = str(row.get(prompt_field, ""))
     completion = str(row.get("completion", ""))
     if not prompt or not completion:
-        raise ValueError(f"KD record is missing prompt/completion: {row.get('id')}")
+        raise ValueError(
+            f"KD record is missing {prompt_field}/completion: {row.get('id')}"
+        )
     prompt_ids = tokenizer.apply_chat_template(
         [{"role": "user", "content": prompt}],
         tokenize=True,
@@ -261,6 +351,62 @@ def tokenize_completion_record(tokenizer: Any, row: Mapping[str, Any], max_lengt
         "prompt_token_count": len(prompt_ids),
         "completion_token_count": len(targets),
         "target_ids": targets,
+    }
+
+
+def tokenize_completion_record(tokenizer: Any, row: Mapping[str, Any], max_length: int) -> Dict[str, Any]:
+    """Tokenize the historical same-prompt KD record format."""
+
+    return _tokenize_prompt_completion(
+        tokenizer,
+        row,
+        max_length,
+        prompt_field="prompt",
+    )
+
+
+def tokenize_kd_record(
+    protocol: Mapping[str, Any],
+    tokenizer: Any,
+    row: Mapping[str, Any],
+    max_length: int,
+) -> Dict[str, Any]:
+    """Tokenize separately conditioned teacher/student contexts over one completion."""
+
+    student_field, teacher_field, context_mode = kd_context_fields(protocol)
+    student = _tokenize_prompt_completion(
+        tokenizer,
+        row,
+        max_length,
+        prompt_field=student_field,
+    )
+    teacher = (
+        student
+        if teacher_field == student_field
+        else _tokenize_prompt_completion(
+            tokenizer,
+            row,
+            max_length,
+            prompt_field=teacher_field,
+        )
+    )
+    if teacher["target_ids"] != student["target_ids"]:
+        raise ValueError(
+            "Teacher and student contexts do not produce identical completion targets: "
+            f"{row.get('id')}"
+        )
+    return {
+        "record_id": student["record_id"],
+        "problem_id": student["problem_id"],
+        "context_mode": context_mode,
+        "student_context_field": student_field,
+        "teacher_context_field": teacher_field,
+        "student_input_ids": student["input_ids"],
+        "teacher_input_ids": teacher["input_ids"],
+        "student_prompt_token_count": student["prompt_token_count"],
+        "teacher_prompt_token_count": teacher["prompt_token_count"],
+        "completion_token_count": student["completion_token_count"],
+        "target_ids": student["target_ids"],
     }
 
 
@@ -462,7 +608,7 @@ def train_logit_kd_adapter(
         train_student=True,
     )
     max_length = int(training["max_length"])
-    encoded = [tokenize_completion_record(tokenizer, row, max_length) for row in rows]
+    encoded = [tokenize_kd_record(protocol, tokenizer, row, max_length) for row in rows]
     order = list(range(len(encoded)))
     random.Random(seed).shuffle(order)
     accumulation = int(training["gradient_accumulation_steps"])
@@ -482,6 +628,10 @@ def train_logit_kd_adapter(
         "token_count": 0,
         "teacher_invalid_mass_sum": 0.0,
         "student_invalid_mass_sum": 0.0,
+        "max_teacher_sequence_tokens": 0,
+        "max_student_sequence_tokens": 0,
+        "teacher_prompt_tokens_sum": 0,
+        "student_prompt_tokens_sum": 0,
     }
     optimizer_step = 0
     started = time.time()
@@ -494,11 +644,24 @@ def train_logit_kd_adapter(
             optimizer.zero_grad(set_to_none=True)
             for index in group:
                 item = encoded[index]
-                input_ids = torch.tensor([item["input_ids"]], dtype=torch.long, device="cuda")
+                teacher_input_ids = torch.tensor(
+                    [item["teacher_input_ids"]], dtype=torch.long, device="cuda"
+                )
+                student_input_ids = torch.tensor(
+                    [item["student_input_ids"]], dtype=torch.long, device="cuda"
+                )
                 targets = torch.tensor(item["target_ids"], dtype=torch.long, device="cuda")
                 with torch.inference_mode():
-                    teacher_logits = causal_completion_logits(teacher, input_ids, item["prompt_token_count"])
-                student_logits = causal_completion_logits(student, input_ids, item["prompt_token_count"])
+                    teacher_logits = causal_completion_logits(
+                        teacher,
+                        teacher_input_ids,
+                        item["teacher_prompt_token_count"],
+                    )
+                student_logits = causal_completion_logits(
+                    student,
+                    student_input_ids,
+                    item["student_prompt_token_count"],
+                )
                 loss, metrics = hybrid_kd_loss(
                     student_logits,
                     teacher_logits,
@@ -519,7 +682,17 @@ def train_logit_kd_adapter(
                 totals["student_invalid_mass_sum"] += float(
                     invalid_vocab_probability_mass(student_logits.detach(), valid_vocab_size).sum()
                 )
-                del teacher_logits, student_logits, loss, metrics, input_ids, targets
+                totals["max_teacher_sequence_tokens"] = max(
+                    int(totals["max_teacher_sequence_tokens"]),
+                    int(teacher_input_ids.shape[1]),
+                )
+                totals["max_student_sequence_tokens"] = max(
+                    int(totals["max_student_sequence_tokens"]),
+                    int(student_input_ids.shape[1]),
+                )
+                totals["teacher_prompt_tokens_sum"] += int(item["teacher_prompt_token_count"])
+                totals["student_prompt_tokens_sum"] += int(item["student_prompt_token_count"])
+                del teacher_logits, student_logits, loss, metrics, teacher_input_ids, student_input_ids, targets
             torch.nn.utils.clip_grad_norm_(trainable, max_grad_norm)
             optimizer.step()
             scheduler.step()
@@ -553,6 +726,13 @@ def train_logit_kd_adapter(
         "mean_kd": totals["kd_sum"] / token_count,
         "teacher_invalid_vocab_mass": totals["teacher_invalid_mass_sum"] / token_count,
         "student_invalid_vocab_mass": totals["student_invalid_mass_sum"] / token_count,
+        "context_mode": encoded[0]["context_mode"],
+        "student_context_field": encoded[0]["student_context_field"],
+        "teacher_context_field": encoded[0]["teacher_context_field"],
+        "mean_teacher_prompt_tokens": totals["teacher_prompt_tokens_sum"] / len(rows),
+        "mean_student_prompt_tokens": totals["student_prompt_tokens_sum"] / len(rows),
+        "max_teacher_sequence_tokens": totals["max_teacher_sequence_tokens"],
+        "max_student_sequence_tokens": totals["max_student_sequence_tokens"],
         "peak_allocated_mib": torch.cuda.max_memory_allocated() / 1024**2,
         "elapsed_seconds": time.time() - started,
         "train_path": str(data_path),

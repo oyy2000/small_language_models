@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import logging
+import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
@@ -40,7 +42,98 @@ def _expect(condition: bool, message: str, errors: List[str]) -> None:
         errors.append(message)
 
 
-def _valid_eval_marker(path: Path, expected_n: int, protocol_digest: str, errors: List[str]) -> Dict[str, Any]:
+def _source_cache_key(relative_path: str, expected_hash: str) -> Tuple[str, str]:
+    return relative_path, expected_hash
+
+
+def _find_historical_git_blob(relative_path: str, expected_hash: str) -> str | None:
+    """Return a commit containing the exact registered source bytes, if one exists."""
+
+    history = subprocess.run(
+        ["git", "rev-list", "--all", "--", relative_path],
+        cwd=PROJECT_ROOT,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if history.returncode != 0:
+        return None
+    for commit in history.stdout.splitlines():
+        blob = subprocess.run(
+            ["git", "show", f"{commit}:{relative_path}"],
+            cwd=PROJECT_ROOT,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if blob.returncode == 0 and hashlib.sha256(blob.stdout).hexdigest() == expected_hash:
+            return commit
+    return None
+
+
+def _validate_source_hashes(
+    sources: Dict[str, str],
+    label: str,
+    errors: List[str],
+    source_resolutions: Dict[Tuple[str, str], Dict[str, Any]],
+) -> None:
+    """Verify registered source against the working tree or an exact Git blob.
+
+    Requiring every artifact to match only the final working tree incorrectly
+    rejects an otherwise recoverable source transition during a long run.  A
+    historical source is accepted only when Git can reproduce its exact bytes.
+    Every resolution is retained in the sealed completion audit.
+    """
+
+    _expect(bool(sources), f"source evidence is missing: {label}", errors)
+    for raw_relative_path, expected_hash in sources.items():
+        relative_path = str(raw_relative_path)
+        relative = Path(relative_path)
+        key = _source_cache_key(relative_path, str(expected_hash))
+        if key not in source_resolutions:
+            resolution: Dict[str, Any] = {
+                "path": relative_path,
+                "expected_sha256": str(expected_hash),
+                "origin": "unresolved",
+                "use_count": 0,
+                "labels": [],
+            }
+            if relative.is_absolute() or ".." in relative.parts:
+                resolution["error"] = "source path must be project-relative"
+            else:
+                source_path = PROJECT_ROOT / relative
+                if source_path.is_file() and file_sha256(source_path) == expected_hash:
+                    resolution["origin"] = "working_tree"
+                else:
+                    commit = _find_historical_git_blob(relative_path, str(expected_hash))
+                    if commit is not None:
+                        resolution["origin"] = "git_blob"
+                        resolution["commit"] = commit
+                    elif not source_path.is_file():
+                        resolution["error"] = f"source is missing: {source_path}"
+                    else:
+                        resolution["working_tree_sha256"] = file_sha256(source_path)
+                        resolution["error"] = "registered source bytes are not recoverable"
+            source_resolutions[key] = resolution
+        resolution = source_resolutions[key]
+        resolution["use_count"] = int(resolution["use_count"]) + 1
+        if label not in resolution["labels"]:
+            resolution["labels"].append(label)
+        _expect(
+            resolution["origin"] in {"working_tree", "git_blob"},
+            f"source hash is not recoverable: {relative_path} expected={expected_hash}",
+            errors,
+        )
+
+
+def _valid_eval_marker(
+    path: Path,
+    expected_n: int,
+    protocol_digest: str,
+    errors: List[str],
+    source_resolutions: Dict[Tuple[str, str], Dict[str, Any]],
+) -> Dict[str, Any]:
     if not path.is_file():
         errors.append(f"missing evaluation marker: {path}")
         return {}
@@ -59,28 +152,33 @@ def _valid_eval_marker(path: Path, expected_n: int, protocol_digest: str, errors
         _expect(len(problem_ids) == len(set(problem_ids)), f"duplicate prediction identities: {prediction}", errors)
     if summary.is_file():
         _expect(marker.get("summary_sha256") == file_sha256(summary), f"summary hash mismatch: {summary}", errors)
-    _expect(bool(marker.get("source_sha256")), f"evaluation source evidence is missing: {path}", errors)
-    for relative_path, expected_hash in marker.get("source_sha256", {}).items():
-        source_path = PROJECT_ROOT / relative_path
-        _expect(source_path.is_file(), f"evaluation source is missing: {source_path}", errors)
-        if source_path.is_file():
-            _expect(expected_hash == file_sha256(source_path), f"evaluation source hash mismatch: {source_path}", errors)
+    _validate_source_hashes(
+        marker.get("source_sha256", {}),
+        f"evaluation:{path.name}",
+        errors,
+        source_resolutions,
+    )
     return marker
 
 
-def _validate_training_source_evidence(marker: Dict[str, Any], protocol_digest: str, label: str, errors: List[str]) -> None:
+def _validate_training_source_evidence(
+    marker: Dict[str, Any],
+    protocol_digest: str,
+    label: str,
+    errors: List[str],
+    source_resolutions: Dict[Tuple[str, str], Dict[str, Any]],
+) -> None:
     _expect(marker.get("protocol_hash") == protocol_digest, f"training protocol hash mismatch: {label}", errors)
     config_path = Path(str(marker.get("config_path")))
     _expect(config_path.is_file(), f"training config is missing: {label}", errors)
     if config_path.is_file():
         _expect(marker.get("config_file_sha256") == file_sha256(config_path), f"training config hash mismatch: {label}", errors)
-    sources = marker.get("source_sha256", {})
-    _expect(bool(sources), f"training source evidence is missing: {label}", errors)
-    for relative_path, expected_hash in sources.items():
-        path = PROJECT_ROOT / relative_path
-        _expect(path.is_file(), f"training source is missing: {path}", errors)
-        if path.is_file():
-            _expect(expected_hash == file_sha256(path), f"training source hash mismatch: {path}", errors)
+    _validate_source_hashes(
+        marker.get("source_sha256", {}),
+        f"training:{label}",
+        errors,
+        source_resolutions,
+    )
 
 
 def main() -> None:
@@ -95,6 +193,12 @@ def main() -> None:
         raise FileExistsError(f"Logit-KD experiment is already sealed: {root_marker}")
     errors: List[str] = []
     counts: Dict[str, int] = {}
+    source_resolutions: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    expected_context_mode = str(
+        protocol["kd"].get("context_mode", "same_prompt_teacher_forced")
+    )
+    expected_teacher_context = str(protocol["kd"].get("teacher_context_field", "prompt"))
+    expected_student_context = str(protocol["kd"].get("student_context_field", "prompt"))
 
     prepared_marker_path = result_root / "PREPARED"
     preflight_path = result_root / "preflight" / "parent_evidence.json"
@@ -111,6 +215,19 @@ def main() -> None:
             errors,
         )
         _expect(preflight.get("status") == "passed", "parent evidence did not pass", errors)
+        if expected_context_mode == "dual_prompt_teacher_forced":
+            alignment = preflight.get("context_alignment", {})
+            _expect(
+                set(alignment) == set(protocol["budgets"]),
+                "preflight context-alignment budget coverage mismatch",
+                errors,
+            )
+            for budget_name, budget in protocol["budgets"].items():
+                evidence = alignment.get(budget_name, {})
+                _expect(evidence.get("status") == "passed", f"context alignment failed: {budget_name}", errors)
+                _expect(int(evidence.get("target_mismatch_count", -1)) == 0, f"completion target mismatch: {budget_name}", errors)
+                _expect(int(evidence.get("records", -1)) == int(budget["expected_records"]), f"context alignment count mismatch: {budget_name}", errors)
+                _expect(evidence.get("context_mode") == expected_context_mode, f"context mode mismatch: {budget_name}", errors)
 
     for budget_name in protocol["budgets"]:
         try:
@@ -130,6 +247,8 @@ def main() -> None:
         _expect(smoke.get("status") == "passed", f"GPU smoke did not pass: {label}", errors)
         _expect(smoke.get("protocol_hash") == digest, f"GPU smoke protocol mismatch: {label}", errors)
         _expect(smoke_marker.get("smoke_sha256") == file_sha256(smoke_path), f"GPU smoke hash mismatch: {label}", errors)
+        for record in smoke.get("records", []):
+            _expect(record.get("context_mode") == expected_context_mode, f"GPU smoke context mismatch: {label}", errors)
         smoke_count += 1
     counts["gpu_smoke_profiles"] = smoke_count
 
@@ -144,6 +263,18 @@ def main() -> None:
         _expect(selection.get("status") == "complete", "validation selection is incomplete", errors)
         _expect(selection.get("protocol_hash") == digest, "selection protocol hash mismatch", errors)
         _expect(selection_marker.get("selection_sha256") == file_sha256(selection_path), "selection hash mismatch", errors)
+        if bool(protocol["validation"].get("require_feasible_candidate", False)):
+            _expect(
+                bool(selection.get("budget_compliance_constraint_satisfied")),
+                "selection did not satisfy the required compliance gate",
+                errors,
+            )
+            _expect(
+                float(selection.get("max_compliance_drop", -1))
+                == float(protocol["validation"]["max_compliance_drop"]),
+                "selection compliance margin mismatch",
+                errors,
+            )
         _expect(bool(selection.get("source_sha256")), "selection source evidence is missing", errors)
         for relative_path, expected_hash in selection.get("source_sha256", {}).items():
             source_path = PROJECT_ROOT / relative_path
@@ -160,6 +291,7 @@ def main() -> None:
         int(protocol["validation"]["limit"]),
         digest,
         errors,
+        source_resolutions,
     )
     validation_evals += 1
     for budget_name in protocol["budgets"]:
@@ -168,6 +300,7 @@ def main() -> None:
             int(protocol["validation"]["limit"]),
             digest,
             errors,
+            source_resolutions,
         )
         validation_evals += 1
     for alpha in protocol["kd"]["alpha_grid"]:
@@ -178,13 +311,19 @@ def main() -> None:
                 if marker is None:
                     errors.append(f"missing or invalid validation adapter: {run_name}")
                 else:
-                    _validate_training_source_evidence(marker, digest, run_name, errors)
+                    _validate_training_source_evidence(
+                        marker, digest, run_name, errors, source_resolutions
+                    )
+                    _expect(marker.get("context_mode") == expected_context_mode, f"training context mismatch: {run_name}", errors)
+                    _expect(marker.get("teacher_context_field") == expected_teacher_context, f"teacher context field mismatch: {run_name}", errors)
+                    _expect(marker.get("student_context_field") == expected_student_context, f"student context field mismatch: {run_name}", errors)
                 validation_adapters += 1
                 _valid_eval_marker(
                     validation_eval_root / f"kd__{run_name}.json",
                     int(protocol["validation"]["limit"]),
                     digest,
                     errors,
+                    source_resolutions,
                 )
                 validation_evals += 1
     counts["validation_adapters"] = validation_adapters
@@ -204,7 +343,10 @@ def main() -> None:
         if marker is None:
             errors.append(f"missing or invalid formal adapter: {budget_name}")
         else:
-            _validate_training_source_evidence(marker, digest, budget_name, errors)
+            _validate_training_source_evidence(
+                marker, digest, budget_name, errors, source_resolutions
+            )
+            _expect(marker.get("context_mode") == expected_context_mode, f"formal context mismatch: {budget_name}", errors)
             _expect(float(marker.get("alpha", -1)) == selected_alpha, f"formal alpha mismatch: {budget_name}", errors)
             _expect(
                 float(marker.get("temperature", -1)) == selected_temperature,
@@ -218,6 +360,7 @@ def main() -> None:
             int(protocol["formal"]["limit"]),
             digest,
             errors,
+            source_resolutions,
         )
         formal_evals += 1
     counts["formal_adapters"] = formal_adapters
@@ -256,6 +399,7 @@ def main() -> None:
                         errors,
                     )
                     metadata = read_json(metadata_path)
+                    _expect(metadata.get("context_mode") == expected_context_mode, f"logit context mismatch: {metadata_path}", errors)
                     _expect(
                         bool(metadata.get("source_code_sha256")),
                         f"logit source evidence is missing: {metadata_path}",
@@ -303,6 +447,7 @@ def main() -> None:
         analysis = read_json(analysis_path)
         _expect(analysis.get("status") == "complete", "analysis status is incomplete", errors)
         _expect(analysis.get("protocol_hash") == digest, "analysis protocol hash mismatch", errors)
+        _expect(analysis.get("context_mode") == expected_context_mode, "analysis context mode mismatch", errors)
         _expect(bool(analysis.get("source_sha256")), "analysis source evidence is missing", errors)
         for relative_path, expected_hash in analysis.get("source_sha256", {}).items():
             source_path = PROJECT_ROOT / relative_path
@@ -338,6 +483,14 @@ def main() -> None:
             "validation_selection": str(selection_path),
             "analysis": str(analysis_path),
             "analysis_artifact_manifest": str(artifact_manifest_path),
+            "audit_source": {
+                "path": str(Path(__file__).resolve()),
+                "sha256": file_sha256(Path(__file__).resolve()),
+            },
+            "source_resolutions": sorted(
+                source_resolutions.values(),
+                key=lambda item: (item["path"], item["expected_sha256"]),
+            ),
         },
     }
     write_json(output_path, report)

@@ -27,8 +27,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="configs/capacity_length_math_mix_pilot_v1.json")
     parser.add_argument("--eval-suite-manifest", required=True)
-    parser.add_argument("--reference-training-manifest-glob", required=True)
-    parser.add_argument("--pilot-training-manifest-glob", required=True)
+    parser.add_argument("--reference-training-manifest-glob", default=None)
+    parser.add_argument("--pilot-training-manifest-glob", default=None)
+    parser.add_argument(
+        "--model-registry-json",
+        default=None,
+        help="Optional external model registry; bypasses the fixed 13-model pilot registry.",
+    )
+    parser.add_argument("--expected-model-count", type=int, default=13)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--gpu-ids", default=None)
     parser.add_argument("--max-parallel", type=int, default=None)
@@ -50,11 +56,21 @@ def main() -> None:
     if suite.get("status") != "complete":
         raise ValueError("Evaluation suite manifest is incomplete")
 
-    reference_runs = _load_runs(args.reference_training_manifest_glob)
-    pilot_runs = _load_runs(args.pilot_training_manifest_glob)
-    models = _model_registry(model_name, reference_runs, pilot_runs)
-    if len(models) != 13:
-        raise RuntimeError(f"Expected base + 6 reference + 6 mixed models, got {len(models)}")
+    if args.model_registry_json:
+        models = _external_model_registry(Path(args.model_registry_json), model_name)
+    else:
+        if not args.reference_training_manifest_glob or not args.pilot_training_manifest_glob:
+            raise ValueError(
+                "The reference and pilot training manifest globs are required when "
+                "--model-registry-json is not provided."
+            )
+        reference_runs = _load_runs(args.reference_training_manifest_glob)
+        pilot_runs = _load_runs(args.pilot_training_manifest_glob)
+        models = _model_registry(model_name, reference_runs, pilot_runs)
+    if len(models) != args.expected_model_count:
+        raise RuntimeError(
+            f"Expected {args.expected_model_count} registered models, got {len(models)}"
+        )
     assigned = [
         model
         for index, model in enumerate(models)
@@ -196,6 +212,25 @@ def _model_registry(
         models.extend(selected)
     if len({model["model_id"] for model in models}) != len(models):
         raise ValueError("Duplicate model IDs in pilot evaluation registry")
+    return models
+
+
+def _external_model_registry(path: Path, model_name: str) -> List[Dict[str, Any]]:
+    payload = _read_json(path)
+    if payload.get("status") != "complete" or payload.get("model_name") != model_name:
+        raise ValueError(f"External model registry is incomplete or model-mismatched: {path}")
+    models = [dict(item) for item in payload.get("models", [])]
+    if not models or len({str(item.get("model_id")) for item in models}) != len(models):
+        raise ValueError("External model registry is empty or contains duplicate model IDs")
+    for model in models:
+        if not isinstance(model.get("metadata"), dict):
+            raise ValueError(f"External model metadata is missing: {model.get('model_id')}")
+        adapter_path = model.get("adapter_path")
+        if adapter_path and validated_adapter_evidence(str(adapter_path)) is None:
+            from length_budget_distill.logit_kd import validated_training_marker
+
+            if validated_training_marker(str(adapter_path)) is None:
+                raise FileNotFoundError(f"Invalid external adapter: {adapter_path}")
     return models
 
 
