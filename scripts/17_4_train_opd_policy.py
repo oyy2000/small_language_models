@@ -18,12 +18,15 @@ if str(SRC_ROOT) not in sys.path:
 from length_budget_distill.config import load_config
 from length_budget_distill.factorial import file_sha256
 from length_budget_distill.opd import (
+    GATE_WAIVED_SMOKE_STAGE,
+    GATE_WAIVED_TRAINING_STAGE,
     OPD_ARMS,
     protocol_hash,
     publish_opd_adapter,
     read_json,
     remove_runtime_after_publish,
     train_opd_arm,
+    validate_gate_waiver,
     validate_opd_protocol,
     validated_temporary_runtime_path,
     validated_opd_adapter,
@@ -37,6 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--arm", choices=OPD_ARMS, required=True)
     parser.add_argument("--reference-manifest", required=True)
     parser.add_argument("--preflight-dir", required=True)
+    parser.add_argument("--gate-waiver-config", default=None)
     parser.add_argument("--runtime-dir", default=None)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--max-prompt-batches", type=int, default=None, help="Smoke-only training cap.")
@@ -52,13 +56,47 @@ def main() -> None:
     validate_opd_protocol(protocol)
     reference_manifest = _resolve(args.reference_manifest)
     preflight_dir = _resolve(args.preflight_dir)
-    _validate_preflight(protocol, preflight_dir)
-
-    checkpoint_root = _resolve(protocol["outputs"]["checkpoint_root"])
-    result_root = _resolve(protocol["outputs"]["result_root"])
-    stage = "smoke" if args.max_prompt_batches is not None else "pilot"
+    waiver = None
+    waiver_evidence = None
+    if args.gate_waiver_config:
+        waiver_path = _resolve(args.gate_waiver_config)
+        waiver = read_json(waiver_path)
+        waiver_evidence = validate_gate_waiver(
+            protocol,
+            waiver,
+            waiver_path=waiver_path,
+            base_config_path=config_path,
+        )
+        if reference_manifest.resolve() != Path(
+            waiver_evidence["reference_manifest_path"]
+        ).resolve():
+            raise ValueError("Gate-waived training reference manifest path mismatch.")
+        if preflight_dir.resolve() != Path(
+            waiver_evidence["failed_preflight_manifest_path"]
+        ).resolve().parent:
+            raise ValueError("Gate-waived training preflight directory mismatch.")
+        checkpoint_root = _resolve(waiver["outputs"]["checkpoint_root"])
+        result_root = _resolve(waiver["outputs"]["result_root"])
+        stage = (
+            GATE_WAIVED_SMOKE_STAGE
+            if args.max_prompt_batches is not None
+            else GATE_WAIVED_TRAINING_STAGE
+        )
+        runtime_experiment_name = str(waiver["continuation_name"])
+    else:
+        _validate_preflight(protocol, preflight_dir)
+        checkpoint_root = _resolve(protocol["outputs"]["checkpoint_root"])
+        result_root = _resolve(protocol["outputs"]["result_root"])
+        stage = "smoke" if args.max_prompt_batches is not None else "pilot"
+        runtime_experiment_name = str(protocol["experiment_name"])
     publish_dir = checkpoint_root / stage / args.arm
-    existing = validated_opd_adapter(protocol, arm=args.arm, adapter_dir=publish_dir, stage=stage)
+    existing = validated_opd_adapter(
+        protocol,
+        arm=args.arm,
+        adapter_dir=publish_dir,
+        stage=stage,
+        required_evidence=waiver_evidence,
+    )
     if existing is not None:
         if args.skip_complete:
             logging.info("opd_arm_already_complete arm=%s output=%s", args.arm, publish_dir)
@@ -75,7 +113,7 @@ def main() -> None:
         runtime_dir = Path(args.runtime_dir)
     else:
         runtime_root = Path(os.environ.get("LBD_RUNTIME_CHECKPOINT_ROOT", "/var/tmp"))
-        runtime_dir = runtime_root / protocol["experiment_name"] / stage / args.arm
+        runtime_dir = runtime_root / runtime_experiment_name / stage / args.arm
     runtime_dir = validated_temporary_runtime_path(runtime_dir)
     if rollout_dir.exists() and not args.resume:
         raise FileExistsError(f"OPD rollout directory already exists: {rollout_dir}")
@@ -104,10 +142,21 @@ def main() -> None:
         reference_manifest_path=reference_manifest,
         source_paths=source_paths,
         stage=stage,
+        additional_evidence=waiver_evidence,
     )
+    if waiver is not None:
+        artifact_evidence_level = (
+            "smoke_gate_waived"
+            if args.max_prompt_batches is not None
+            else str(waiver["evidence_level"])
+        )
+    else:
+        artifact_evidence_level = (
+            "smoke" if args.max_prompt_batches is not None else protocol["evidence_level"]
+        )
     arm_manifest = {
         "status": "complete",
-        "evidence_level": "smoke" if stage == "smoke" else protocol["evidence_level"],
+        "evidence_level": artifact_evidence_level,
         "stage": stage,
         "arm": args.arm,
         "protocol_hash": protocol_hash(protocol),
@@ -131,6 +180,8 @@ def main() -> None:
         "gold_labels_used_in_loss": False,
         "length_used_in_loss": False,
     }
+    if waiver_evidence is not None:
+        arm_manifest["gate_waiver"] = waiver_evidence
     write_json(arm_manifest_path, arm_manifest)
     remove_runtime_after_publish(runtime_dir)
     logging.info(

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import importlib.util
+import copy
 import gzip
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -17,15 +20,18 @@ if str(SRC_ROOT) not in sys.path:
 
 from length_budget_distill.config import load_config
 from length_budget_distill.factorial import file_sha256
+from length_budget_distill.model_loading import resolve_model_load_spec
 from length_budget_distill.opd import (
     binary_auc,
     build_bounded_concise_prompt,
     clipped_opd_loss,
     preflight_summary,
     protocol_hash,
+    publish_opd_adapter,
     reference_length_bounds,
     sampled_token_advantage,
     topk_overlap,
+    validate_gate_waiver,
     validate_opd_protocol,
     validate_reference_manifest,
 )
@@ -39,6 +45,57 @@ from length_budget_distill.student_prompts import build_student_math_prompt
 
 
 class OPDTest(unittest.TestCase):
+    def test_node_local_model_override_preserves_registered_identity(self) -> None:
+        config = {"model_name": "Qwen/example", "revision": "registered-revision"}
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.dict(
+                os.environ,
+                {"LBD_TEST_MODEL_SOURCE": directory, "LBD_LOCAL_FILES_ONLY": "0"},
+            ):
+                source, revision, local_only = resolve_model_load_spec(
+                    config, override_env="LBD_TEST_MODEL_SOURCE"
+                )
+        self.assertEqual(source, str(Path(directory).resolve()))
+        self.assertIsNone(revision)
+        self.assertTrue(local_only)
+
+    def test_missing_node_local_model_override_is_rejected(self) -> None:
+        config = {"model_name": "Qwen/example", "revision": "registered-revision"}
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing"
+            with mock.patch.dict(os.environ, {"LBD_TEST_MODEL_SOURCE": str(missing)}):
+                with self.assertRaisesRegex(FileNotFoundError, "missing"):
+                    resolve_model_load_spec(config, override_env="LBD_TEST_MODEL_SOURCE")
+
+    def test_shared_node_submitter_dry_run_builds_ordered_dag(self) -> None:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(PROJECT_ROOT / "scripts/17_0_submit_opd_prompt_pilot.py"),
+                "--reference-node",
+                "c30,c31",
+                "--preflight-node",
+                "c30",
+                "--training-node",
+                "c32",
+                "--evaluation-node",
+                "c31",
+                "--dry-run",
+            ],
+            cwd=PROJECT_ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        self.assertIn(
+            "--partition=a6000 --nodelist=c30,c31 --job-name=opd17_reference",
+            completed.stdout,
+        )
+        self.assertIn("--dependency=afterok:DRY_REFERENCE", completed.stdout)
+        self.assertIn("--nodelist=c30 --job-name=opd17_preflight", completed.stdout)
+        self.assertIn("--nodelist=c32 --job-name=opd17_training", completed.stdout)
+        self.assertIn('"status": "dry_run"', completed.stdout)
+
     def test_registered_protocol_is_pure_dual_prompt_opd(self) -> None:
         protocol = load_config(
             str(PROJECT_ROOT / "configs/capacity_length_opd_prompt_pilot_v1.json")
@@ -58,6 +115,148 @@ class OPDTest(unittest.TestCase):
         protocol["objective"]["correctness_reward"] = True
         with self.assertRaisesRegex(ValueError, "forbids"):
             validate_opd_protocol(protocol)
+
+    def test_gate_waiver_is_hash_bound_and_remains_exploratory(self) -> None:
+        config_path = PROJECT_ROOT / "configs/capacity_length_opd_prompt_pilot_v1.json"
+        waiver_path = (
+            PROJECT_ROOT
+            / "configs/capacity_length_opd_prompt_gate_waived_continuation_v1.json"
+        )
+        protocol = load_config(str(config_path))
+        waiver = json.loads(waiver_path.read_text(encoding="utf-8"))
+        evidence = validate_gate_waiver(
+            protocol,
+            waiver,
+            waiver_path=waiver_path,
+            base_config_path=config_path,
+        )
+        self.assertTrue(evidence["preflight_gate_waived"])
+        self.assertFalse(evidence["original_preflight_passed"])
+        self.assertFalse(evidence["formal_claim_allowed"])
+        self.assertEqual(evidence["observed_concise_in_band_rate"], 0.12)
+        tampered = copy.deepcopy(waiver)
+        tampered["failed_preflight"]["observed_concise_in_band_rate"] = 0.70
+        with self.assertRaisesRegex(ValueError, "contents"):
+            validate_gate_waiver(
+                protocol,
+                tampered,
+                waiver_path=waiver_path,
+                base_config_path=config_path,
+            )
+
+    def test_gate_waived_training_launcher_dry_run_is_isolated(self) -> None:
+        config_path = PROJECT_ROOT / "configs/capacity_length_opd_prompt_pilot_v1.json"
+        registered_waiver_path = (
+            PROJECT_ROOT
+            / "configs/capacity_length_opd_prompt_gate_waived_continuation_v1.json"
+        )
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT / "results") as directory:
+            root = Path(directory)
+            waiver = json.loads(registered_waiver_path.read_text(encoding="utf-8"))
+            waiver["outputs"] = {
+                "result_root": str(root / "results"),
+                "checkpoint_root": str(root / "checkpoints"),
+                "figure_root": str(root / "figures"),
+            }
+            waiver_path = root / "waiver.json"
+            waiver_path.write_text(json.dumps(waiver) + "\n", encoding="utf-8")
+            output_dir = root / "results/gate_waived_smoke/training"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(PROJECT_ROOT / "scripts/17_4_launch_opd_training.py"),
+                    "--config",
+                    str(config_path),
+                    "--reference-manifest",
+                    str(PROJECT_ROOT / waiver["reference_evidence"]["manifest_path"]),
+                    "--preflight-dir",
+                    str(
+                        (PROJECT_ROOT / waiver["failed_preflight"]["manifest_path"]).parent
+                    ),
+                    "--gpu-ids",
+                    "1,2",
+                    "--output-dir",
+                    str(output_dir),
+                    "--gate-waiver-config",
+                    str(waiver_path),
+                    "--max-prompt-batches",
+                    "1",
+                    "--dry-run",
+                ],
+                cwd=PROJECT_ROOT,
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+            manifest = json.loads(
+                (output_dir / "training_launcher_manifest_dry_run.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(manifest["stage"], "gate_waived_smoke")
+            self.assertTrue(manifest["gate_waiver"]["preflight_gate_waived"])
+            self.assertEqual(completed.stdout.count("--max-prompt-batches 1"), 2)
+
+    def test_adapter_evidence_accepts_identical_hash_bound_reference_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime_dir = root / "runtime"
+            publish_dir = root / "published"
+            runtime_dir.mkdir()
+            rollout_manifest = root / "rollout_manifest.json"
+            reference_manifest = root / "reference_manifest.json"
+            source_path = root / "source.py"
+            for path in (rollout_manifest, reference_manifest, source_path):
+                path.write_text("{}\n", encoding="utf-8")
+            additional = {
+                "reference_manifest_path": str(reference_manifest),
+                "reference_manifest_sha256": file_sha256(reference_manifest),
+                "preflight_gate_waived": True,
+            }
+            published = {
+                "adapter_model_sha256": "model",
+                "adapter_config_sha256": "config",
+                "train_manifest_sha256": "manifest",
+            }
+            with mock.patch(
+                "length_budget_distill.opd.publish_adapter", return_value=published
+            ) as mocked_publish:
+                observed = publish_opd_adapter(
+                    {"training": {"seed": 17}},
+                    arm="standard_prompt",
+                    runtime_dir=runtime_dir,
+                    publish_dir=publish_dir,
+                    rollout_manifest_path=rollout_manifest,
+                    reference_manifest_path=reference_manifest,
+                    source_paths=[source_path],
+                    stage="gate_waived_smoke",
+                    additional_evidence=additional,
+                )
+            self.assertEqual(observed, published)
+            evidence = mocked_publish.call_args.kwargs["evidence"]
+            self.assertTrue(evidence["preflight_gate_waived"])
+            self.assertEqual(
+                evidence["reference_manifest_sha256"], file_sha256(reference_manifest)
+            )
+
+    def test_gate_waiver_preserves_project_stable_artifact_paths(self) -> None:
+        config_path = PROJECT_ROOT / "configs/capacity_length_opd_prompt_pilot_v1.json"
+        waiver_path = (
+            PROJECT_ROOT
+            / "configs/capacity_length_opd_prompt_gate_waived_continuation_v1.json"
+        )
+        protocol = load_config(str(config_path))
+        waiver = json.loads(waiver_path.read_text(encoding="utf-8"))
+        evidence = validate_gate_waiver(
+            protocol,
+            waiver,
+            waiver_path=waiver_path,
+            base_config_path=config_path,
+        )
+        self.assertEqual(
+            evidence["reference_manifest_path"],
+            str(PROJECT_ROOT / waiver["reference_evidence"]["manifest_path"]),
+        )
 
     def test_relative_length_bounds_are_ratio_based_and_clamped(self) -> None:
         self.assertEqual(reference_length_bounds(100), (96, 96))

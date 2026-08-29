@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
@@ -21,6 +20,7 @@ from length_budget_distill.config import load_config
 from length_budget_distill.datasets import load_problem_records
 from length_budget_distill.factorial import canonical_sha256, file_sha256, runtime_metadata
 from length_budget_distill.logit_kd import load_and_validate_tokenizers
+from length_budget_distill.model_loading import resolve_model_load_spec
 from length_budget_distill.opd import (
     build_bounded_concise_prompt,
     protocol_hash,
@@ -180,12 +180,15 @@ def _load_student(protocol: Dict[str, Any]) -> Tuple[Any, Any, Any, Dict[str, An
     dtype = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32}[
         student["torch_dtype"]
     ]
+    model_source, revision, local_only = resolve_model_load_spec(
+        student, override_env="LBD_STUDENT_MODEL_SOURCE"
+    )
     model = AutoModelForCausalLM.from_pretrained(
-        student["model_name"],
-        revision=student["revision"],
+        model_source,
+        revision=revision,
         torch_dtype=dtype,
         low_cpu_mem_usage=True,
-        local_files_only=bool(int(os.environ.get("LBD_LOCAL_FILES_ONLY", "0"))),
+        local_files_only=local_only,
     ).to("cuda")
     model.eval()
     return model, tokenizer, torch, {

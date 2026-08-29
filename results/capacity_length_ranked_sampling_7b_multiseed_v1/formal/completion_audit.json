@@ -1,0 +1,71 @@
+{
+  "status": "passed",
+  "experiment_name": "capacity_length_ranked_sampling_7b_multiseed_v1",
+  "protocol_variant": "comparative_multiseed_ranked_length_evaluation",
+  "evidence_level": "comparative_multiseed_replication",
+  "scope": "Locked and previously observed GSM8K test[50:1319] only",
+  "config_path": "/home/youyang7/projects/small_language_model/results/capacity_length_ranked_sampling_7b_multiseed_v1/formal/protocol/frozen_eval_config.json",
+  "config_hash": "162ecfa0d94e39f03f7b1b060ec7e398ea3cdcc6a6a6d0fa3bd38a5473265a53",
+  "config_file_sha256": "ce33a2cf60a29714163fd117000ff6622440476b1adfb4b806c8463f2cc1a080",
+  "counts": {
+    "training_parents": 2,
+    "trained_adapters": 9,
+    "training_seeds": 3,
+    "evaluated_models": 10,
+    "evaluation_questions": 1269,
+    "predictions": 12690,
+    "analysis_artifacts": 7
+  },
+  "evidence": {
+    "training_parents": [
+      {
+        "label": "sealed_seed17_parent",
+        "config_path": "/home/youyang7/projects/small_language_model/configs/capacity_length_ranked_sampling_7b_training_seed17_v1.json",
+        "canonical_config_sha256": "125dcf1b8c5a992f0f42e8c15eb8e56edef6fcbca660a3fbce07fa918082b561",
+        "config_file_sha256": "47c8797678de3ca0914d4f9ed7b6fe01aea9f5d4704d6fedd52ac40aadb9e8ec",
+        "input_manifest_path": "/home/youyang7/projects/small_language_model/results/capacity_length_ranked_sampling_7b_v1/formal/training/input/dataset_manifest.json",
+        "input_manifest_sha256": "d5ae3204f1f33e28643bdd78394de486eaa152b49db92a24905c7492ad8e6717",
+        "launch_manifest_path": "/home/youyang7/projects/small_language_model/results/capacity_length_ranked_sampling_7b_v1/formal/training/training_manifest_shard_00_of_01.json",
+        "launch_manifest_sha256": "16b5cbf567a1550e505f956df05cca351d30f28cf7da655671655ec482058820",
+        "audit_path": "/home/youyang7/projects/small_language_model/results/capacity_length_ranked_sampling_7b_v1/formal/training/audit/training_audit.json",
+        "audit_sha256": "db1b09207d03886f3d58e26c22299b83e05df87322434bb63620771f71e26a43",
+        "completion_marker_path": "/home/youyang7/projects/small_language_model/results/capacity_length_ranked_sampling_7b_v1/formal/training/audit/TRAINING_COMPLETE",
+        "completion_marker_sha256": "778b3a2a7cac6f098b18c09f6376377763bd70c6604ad6f5da62c39d053f2fdf",
+        "expected_seeds": [
+          17
+        ],
+        "expected_run_count": 3,
+        "validated_run_count": 3
+      },
+      {
+        "label": "seed42_73_extension",
+        "config_path": "/home/youyang7/projects/small_language_model/configs/capacity_length_ranked_sampling_7b_training_seed42_73_v1.json",
+        "canonical_config_sha256": "3c1d120d25e0a7222d47d2bc45d4b19b73c3b4a2c55852df657f539ac1d7c349",
+        "config_file_sha256": "31f3fbde096479e235846fe5dd5bb6050b671483dc65c11c823ea5e212098131",
+        "input_manifest_path": "/home/youyang7/projects/small_language_model/results/capacity_length_ranked_sampling_7b_multiseed_v1/formal/training/seed42_73/input/dataset_manifest.json",
+        "input_manifest_sha256": "f4c112da8d16d0646cdb0a827f152630e37a993992283f5e1329d0b9b642ecdb",
+        "launch_manifest_path": "/home/youyang7/projects/small_language_model/results/capacity_length_ranked_sampling_7b_multiseed_v1/formal/training/seed42_73/training_manifest_shard_00_of_01.json",
+        "launch_manifest_sha256": "354b2abeeccf7b00fd00869647becea3991024e92018d4f5b698995fd6220d95",
+        "audit_path": "/home/youyang7/projects/small_language_model/results/capacity_length_ranked_sampling_7b_multiseed_v1/formal/training/seed42_73/audit/training_audit.json",
+        "audit_sha256": "edeb8d5599bc450291e7d4e055c4d163611dd7b7118dfc0d63232fa211f857a2",
+        "completion_marker_path": "/home/youyang7/projects/small_language_model/results/capacity_length_ranked_sampling_7b_multiseed_v1/formal/training/seed42_73/audit/TRAINING_COMPLETE",
+        "completion_marker_sha256": "e10df5386a091962b656d5b7ccb316ca9b53f97b892dc1e2822103b20b5005b6",
+        "expected_seeds": [
+          42,
+          73
+        ],
+        "expected_run_count": 6,
+        "validated_run_count": 6
+      }
+    ],
+    "evaluation_manifest": "/home/youyang7/projects/small_language_model/results/capacity_length_ranked_sampling_7b_multiseed_v1/formal/eval/eval_manifest_formal_shard_00_of_01.json",
+    "evaluation_manifest_sha256": "c2d66741a3dddbdebdce2bfd9ae66d27c021662ae96f04aed0b3db8276b2c1ad",
+    "analysis": "/home/youyang7/projects/small_language_model/results/capacity_length_ranked_sampling_7b_multiseed_v1/formal/analysis/ranked_multiseed_analysis.json",
+    "analysis_sha256": "811d5278a9def16aadad0ab5cba488cc660bccfa3b0645a73dfed250e74ff3ea",
+    "analysis_artifact_manifest": "/home/youyang7/projects/small_language_model/results/capacity_length_ranked_sampling_7b_multiseed_v1/formal/analysis/analysis_artifact_manifest.json",
+    "analysis_artifact_manifest_sha256": "563148d4ddfc766bffc1e1f4a7fa884a19e58f646312f6fcaab5f18368202e65",
+    "experiment_report": "/home/youyang7/projects/small_language_model/results/capacity_length_ranked_sampling_7b_multiseed_v1/formal/analysis/experiment_report.md",
+    "experiment_report_sha256": "3839f683070c5e7be98a3d3c5cc75b937fe9aa8ba637f5d233d54338f57c7ac8"
+  },
+  "errors": []
+}

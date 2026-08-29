@@ -140,3 +140,118 @@ select_stably_memory_fit_gpus() {
     sleep "${wait_seconds}"
   done
 }
+
+# Apply the project admission policy for the approved GPU nodes.  The default
+# remains node-specific (capacity-only on C49, strict idle checks elsewhere).
+# A recovery launcher may explicitly set GPU_ADMISSION_POLICY=memory_fit after
+# a physical process inventory confirms that remaining memory plus the chosen
+# safety threshold is sufficient.  This opt-in avoids weakening every caller.
+select_gpus_for_approved_node() {
+  local min_free_mib="${1:?minimum free memory is required}"
+  local min_gpus="${2:-1}"
+  local wait_seconds="${3:-30}"
+  local stable_checks="${4:-2}"
+  local max_used_mib="${5:-500}"
+  local max_utilization="${6:-10}"
+  local host
+  local admission_policy="${GPU_ADMISSION_POLICY:-auto}"
+  host="$(hostname -s | tr '[:upper:]' '[:lower:]')"
+
+  case "${host}" in
+    c30|c31|c32|c49)
+      ;;
+    *)
+      echo "GPU admission is not registered for node ${host}." >&2
+      return 2
+      ;;
+  esac
+
+  case "${admission_policy}" in
+    auto)
+      if [ "${host}" = "c49" ]; then
+        select_stably_memory_fit_gpus \
+          "${min_free_mib}" "${min_gpus}" "${wait_seconds}" "${stable_checks}"
+      else
+        select_stably_idle_gpus \
+          "${min_free_mib}" "${min_gpus}" "${wait_seconds}" \
+          "${max_used_mib}" "${max_utilization}" "${stable_checks}"
+      fi
+      ;;
+    memory_fit)
+      select_stably_memory_fit_gpus \
+        "${min_free_mib}" "${min_gpus}" "${wait_seconds}" "${stable_checks}"
+      ;;
+    idle)
+      select_stably_idle_gpus \
+        "${min_free_mib}" "${min_gpus}" "${wait_seconds}" \
+        "${max_used_mib}" "${max_utilization}" "${stable_checks}"
+      ;;
+    *)
+      echo "Unknown GPU_ADMISSION_POLICY=${admission_policy}; expected auto, idle, or memory_fit." >&2
+      return 2
+      ;;
+  esac
+}
+
+# Copy an immutable Hugging Face snapshot from the shared cache to node-local
+# storage. This avoids mmap faults against large Safetensors files on BeeGFS.
+stage_hf_snapshot_to_local() {
+  local model_name="${1:?model name is required}"
+  local revision="${2:?model revision is required}"
+  local hub_cache="${HF_HUB_CACHE:?HF_HUB_CACHE must be set}"
+  local local_root="${LBD_LOCAL_MODEL_ROOT:-/var/tmp/${USER}/hf_snapshots}"
+  local model_key="${model_name//\//--}"
+  local source_dir="${hub_cache}/models--${model_key}/snapshots/${revision}"
+  local destination="${local_root}/models--${model_key}/snapshots/${revision}"
+  local marker="${destination}/.lbd_snapshot_complete"
+  local lock_path="${destination}.lock"
+  local source_signature destination_signature
+
+  if [ ! -d "${source_dir}" ]; then
+    echo "Registered Hugging Face snapshot is missing: ${source_dir}" >&2
+    return 2
+  fi
+  mkdir_with_retry "$(dirname "${destination}")"
+  exec {snapshot_lock_fd}>"${lock_path}"
+  flock "${snapshot_lock_fd}"
+  source_signature="$({
+    find -L "${source_dir}" -maxdepth 1 -type f -printf '%f|%s\n'
+  } | sort | sha256sum | awk '{print $1}')"
+  if [ ! -f "${marker}" ] || [ "$(<"${marker}")" != "${source_signature}" ]; then
+    mkdir_with_retry "${destination}"
+    rsync -aL --partial "${source_dir}/" "${destination}/"
+    destination_signature="$({
+      find "${destination}" -maxdepth 1 -type f ! -name '.lbd_snapshot_complete' -printf '%f|%s\n'
+    } | sort | sha256sum | awk '{print $1}')"
+    if [ "${destination_signature}" != "${source_signature}" ]; then
+      echo "Node-local model snapshot validation failed: ${destination}" >&2
+      return 1
+    fi
+    printf '%s\n' "${source_signature}" >"${marker}"
+  fi
+  flock -u "${snapshot_lock_fd}"
+  exec {snapshot_lock_fd}>&-
+  STAGED_HF_SNAPSHOT="${destination}"
+  echo "Validated node-local model snapshot: ${STAGED_HF_SNAPSHOT}"
+}
+
+stage_opd_model_snapshots() {
+  local config_path="${1:?OPD config path is required}"
+  local include_teacher="${2:-0}"
+  local student_name student_revision teacher_name teacher_revision
+
+  IFS='|' read -r student_name student_revision < <(
+    python3 -c 'import json, sys; c=json.load(open(sys.argv[1])); m=c["models"]["student"]; print(m["model_name"] + "|" + m["revision"])' "${config_path}"
+  )
+  stage_hf_snapshot_to_local "${student_name}" "${student_revision}"
+  export LBD_STUDENT_MODEL_SOURCE="${STAGED_HF_SNAPSHOT}"
+
+  if [ "${include_teacher}" = "1" ]; then
+    IFS='|' read -r teacher_name teacher_revision < <(
+      python3 -c 'import json, sys; c=json.load(open(sys.argv[1])); m=c["models"]["teacher"]; print(m["model_name"] + "|" + m["revision"])' "${config_path}"
+    )
+    stage_hf_snapshot_to_local "${teacher_name}" "${teacher_revision}"
+    export LBD_TEACHER_MODEL_SOURCE="${STAGED_HF_SNAPSHOT}"
+  fi
+  export LBD_LOCAL_FILES_ONLY=1
+}

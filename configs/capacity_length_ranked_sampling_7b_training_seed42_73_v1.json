@@ -1,0 +1,56 @@
+{
+  "experiment_name": "capacity_length_ranked_sampling_7b_training_seed42_73_v1",
+  "protocol_variant": "comparative_multiseed_ranked_length_sft_extension",
+  "parent_generation": {
+    "config_path": "configs/capacity_length_ranked_sampling_7b_v1.json",
+    "canonical_config_sha256": "4950b6a9c48bd220c268330aa983a55cab79391ab2137534d6ef6170746ee447",
+    "config_file_sha256": "fb058fe2e790a6c045a3b72a0e5a21d2237eb9ebd2c296edf744431641f157c3",
+    "dataset_manifest_path": "results/capacity_length_ranked_sampling_7b_v1/formal/datasets/dataset_manifest.json",
+    "dataset_manifest_sha256": "5ec60e2112a9d83f59fcea2bcbae4f153deba0848c5f736d48f0384a3242233a",
+    "completion_marker_path": "results/capacity_length_ranked_sampling_7b_v1/formal/datasets/GENERATION_COMPLETE",
+    "completion_marker_sha256": "a6a968283ac0ded659982fbd732cda449276940dbbd905350c3fb297e754600e"
+  },
+  "training_scope": {
+    "labels": [
+      "short",
+      "medium",
+      "long"
+    ],
+    "mode": "equal_example",
+    "training_seeds": [
+      42,
+      73
+    ],
+    "expected_examples_per_run": 881,
+    "run_count": 6
+  },
+  "student": {
+    "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "trust_remote_code": false,
+    "torch_dtype": "bfloat16",
+    "use_lora": true,
+    "lora": {
+      "r": 4,
+      "alpha": 16,
+      "dropout": 0.05,
+      "target_modules": "all-linear"
+    }
+  },
+  "training": {
+    "num_train_epochs": 1,
+    "per_device_train_batch_size": 1,
+    "gradient_accumulation_steps": 8,
+    "learning_rate": 0.00002,
+    "warmup_ratio": 0.03,
+    "logging_steps": 10,
+    "save_steps": 200,
+    "bf16": true,
+    "gradient_checkpointing": true,
+    "max_length": 2048,
+    "completion_only_loss": true,
+    "assistant_only_loss": false,
+    "packing": false,
+    "report_to": "none"
+  }
+}

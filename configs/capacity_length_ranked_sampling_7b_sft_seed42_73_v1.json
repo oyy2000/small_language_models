@@ -1,0 +1,8 @@
+{
+  "parent_config_sha256": "3c1d120d25e0a7222d47d2bc45d4b19b73c3b4a2c55852df657f539ac1d7c349",
+  "training_overrides": {
+    "per_device_train_batch_size": 4,
+    "gradient_accumulation_steps": 1
+  },
+  "rationale": "Reuse the registered batch-size-4 correction while adding only training seeds 42 and 73."
+}

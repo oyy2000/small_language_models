@@ -1,0 +1,188 @@
+{
+  "experiment_name": "capacity_length_ranked_sampling_multiteacher_v1",
+  "protocol_variant": "registered_multiteacher_ranked_length_main_matrix",
+  "phase_a_parent_spec": {
+    "completion_marker_path": "results/capacity_length_ranked_sampling_7b_multiseed_v1/MULTISEED_COMPLETE",
+    "completion_audit_path": "results/capacity_length_ranked_sampling_7b_multiseed_v1/formal/completion_audit.json",
+    "frozen_eval_config_path": "results/capacity_length_ranked_sampling_7b_multiseed_v1/formal/protocol/frozen_eval_config.json"
+  },
+  "sealed_7b_generation": {
+    "config_path": "configs/capacity_length_ranked_sampling_7b_v1.json",
+    "canonical_config_sha256": "4950b6a9c48bd220c268330aa983a55cab79391ab2137534d6ef6170746ee447",
+    "config_file_sha256": "fb058fe2e790a6c045a3b72a0e5a21d2237eb9ebd2c296edf744431641f157c3",
+    "dataset_manifest_path": "results/capacity_length_ranked_sampling_7b_v1/formal/datasets/dataset_manifest.json",
+    "dataset_manifest_sha256": "5ec60e2112a9d83f59fcea2bcbae4f153deba0848c5f736d48f0384a3242233a",
+    "completion_marker_path": "results/capacity_length_ranked_sampling_7b_v1/formal/datasets/GENERATION_COMPLETE",
+    "completion_marker_sha256": "a6a968283ac0ded659982fbd732cda449276940dbbd905350c3fb297e754600e"
+  },
+  "dataset": {
+    "source": "hf_dataset",
+    "dataset_name": "openai/gsm8k",
+    "dataset_config": "main",
+    "split": "train",
+    "question_field": "question",
+    "answer_field": "answer",
+    "answer_format": "gsm8k",
+    "verifier": "gsm8k_numeric",
+    "max_examples": 2000
+  },
+  "cohort": {
+    "problem_ids_path": "results/capacity_length_factorial_seed17_v1/formal/sft_data/dataset_manifest.json",
+    "problem_ids_field": "common_problem_ids",
+    "problem_ids_file_sha256": "d06f70d9e3a4e4cc8b5655349a1a403b4c6375246a3939e8a7796fb9c3bdadef",
+    "expected_problem_count": 881,
+    "description": "Hash-bound 881-problem cohort reused by every teacher before global-support intersection."
+  },
+  "teachers": [
+    {
+      "name": "qwen2p5_1p5b",
+      "role": "self_distillation_control",
+      "size_b": 1.5,
+      "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+      "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+      "backend": "vllm",
+      "dtype": "bfloat16",
+      "tensor_parallel_size": 1,
+      "trust_remote_code": false,
+      "tokenizer_kwargs": {"cache_dir": "/mnt/beegfs/youyang7/.cache/huggingface/hub"},
+      "llm_kwargs": {"gpu_memory_utilization": 0.85, "max_model_len": 2048, "max_num_seqs": 128}
+    },
+    {
+      "name": "qwen2p5_3b",
+      "role": "external_teacher",
+      "size_b": 3.0,
+      "model_name": "Qwen/Qwen2.5-3B-Instruct",
+      "tokenizer_name": "Qwen/Qwen2.5-3B-Instruct",
+      "backend": "vllm",
+      "dtype": "bfloat16",
+      "tensor_parallel_size": 1,
+      "trust_remote_code": false,
+      "tokenizer_kwargs": {"cache_dir": "/mnt/beegfs/youyang7/.cache/huggingface/hub"},
+      "llm_kwargs": {"gpu_memory_utilization": 0.85, "max_model_len": 2048, "max_num_seqs": 96}
+    },
+    {
+      "name": "qwen2p5_7b",
+      "role": "external_teacher_reused_sealed_pool",
+      "size_b": 7.0,
+      "model_name": "Qwen/Qwen2.5-7B-Instruct",
+      "tokenizer_name": "Qwen/Qwen2.5-7B-Instruct",
+      "backend": "vllm",
+      "dtype": "bfloat16",
+      "tensor_parallel_size": 1,
+      "trust_remote_code": false,
+      "tokenizer_kwargs": {"cache_dir": "/mnt/beegfs/youyang7/.cache/huggingface/hub"},
+      "llm_kwargs": {"gpu_memory_utilization": 0.66, "max_model_len": 2048, "max_num_seqs": 64}
+    },
+    {
+      "name": "qwen2p5_14b",
+      "role": "external_teacher",
+      "size_b": 14.0,
+      "model_name": "Qwen/Qwen2.5-14B-Instruct",
+      "model_path": "/mnt/beegfs/youyang7/.cache/huggingface/hub/models--Qwen--Qwen2.5-14B-Instruct/snapshots/cf98f3b3bbb457ad9e2bb7baf9a0125b6b88caa8",
+      "tokenizer_name": "Qwen/Qwen2.5-14B-Instruct",
+      "backend": "vllm",
+      "dtype": "bfloat16",
+      "tensor_parallel_size": 1,
+      "trust_remote_code": false,
+      "tokenizer_kwargs": {"cache_dir": "/mnt/beegfs/youyang7/.cache/huggingface/hub"},
+      "llm_kwargs": {"gpu_memory_utilization": 0.88, "max_model_len": 2048, "max_num_seqs": 24}
+    }
+  ],
+  "generation": {
+    "num_candidates": 16,
+    "num_shards": 3,
+    "base_seed": 20260825,
+    "batch_size": 4,
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "max_new_tokens": 512,
+    "cap_max_new_tokens_by_budget": false,
+    "stop": ["<|im_end|>"]
+  },
+  "relative_length_selection": {
+    "labels": ["short", "medium", "long"],
+    "method": "shortest_lower_median_longest",
+    "deduplication": "whitespace_normalized_exact_text",
+    "minimum_unique_correct": 3,
+    "insufficient_candidate_policy": "drop_problem_from_all_labels"
+  },
+  "token_counter": {
+    "backend": "hf_tokenizer",
+    "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "trust_remote_code": false,
+    "tokenizer_kwargs": {"cache_dir": "/mnt/beegfs/youyang7/.cache/huggingface/hub"}
+  },
+  "generation_output": {
+    "include_prompt_in_trace": true,
+    "text_format": "prompt_completion"
+  },
+  "matrix": {
+    "ranks": ["relative_short", "relative_medium", "relative_long"],
+    "training_seeds": [17, 42, 73],
+    "training_support": "global_teacher_rank_common_problem_intersection",
+    "minimum_global_common_problems": 500,
+    "mode": "equal_example",
+    "expected_adapter_count": 36
+  },
+  "student": {
+    "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "trust_remote_code": false,
+    "torch_dtype": "bfloat16",
+    "use_lora": true,
+    "lora": {"r": 4, "alpha": 16, "dropout": 0.05, "target_modules": "all-linear"}
+  },
+  "training": {
+    "num_train_epochs": 1,
+    "per_device_train_batch_size": 1,
+    "gradient_accumulation_steps": 8,
+    "learning_rate": 0.00002,
+    "warmup_ratio": 0.03,
+    "logging_steps": 10,
+    "save_steps": 200,
+    "bf16": true,
+    "gradient_checkpointing": true,
+    "max_length": 2048,
+    "completion_only_loss": true,
+    "assistant_only_loss": false,
+    "packing": false,
+    "report_to": "none"
+  },
+  "evaluation": {
+    "dataset_split": "test",
+    "start_index": 50,
+    "limit": 1269,
+    "max_new_tokens": 512,
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "batch_size": 32,
+    "include_base_model": true,
+    "expected_adapter_count": 36,
+    "expected_run_count": 37,
+    "max_parallel": 3
+  },
+  "analysis": {
+    "familywise_alpha": 0.05,
+    "bootstrap_samples": 10000,
+    "within_teacher_pairs": [
+      ["relative_short", "relative_medium"],
+      ["relative_medium", "relative_long"],
+      ["relative_short", "relative_long"]
+    ],
+    "interaction_rank_pair": ["relative_short", "relative_long"],
+    "teacher_interaction_pairs": [
+      ["qwen2p5_3b", "qwen2p5_1p5b"],
+      ["qwen2p5_7b", "qwen2p5_1p5b"],
+      ["qwen2p5_14b", "qwen2p5_1p5b"],
+      ["qwen2p5_7b", "qwen2p5_3b"],
+      ["qwen2p5_14b", "qwen2p5_3b"],
+      ["qwen2p5_14b", "qwen2p5_7b"]
+    ],
+    "scope": "Locked and previously observed GSM8K test[50:1319] only"
+  },
+  "outputs": {
+    "result_root": "results/capacity_length_ranked_sampling_multiteacher_v1",
+    "figure_root": "figures/capacity_length_ranked_sampling_multiteacher_v1",
+    "checkpoint_root": "checkpoints/capacity_length_ranked_sampling_multiteacher_v1"
+  }
+}

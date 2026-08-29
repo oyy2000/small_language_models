@@ -13,6 +13,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
+from length_budget_distill.model_loading import resolve_model_load_spec
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -489,12 +491,17 @@ def load_teacher_and_student(
         "float16": torch.float16,
         "float32": torch.float32,
     }
-    local_only = bool(int(os.environ.get("LBD_LOCAL_FILES_ONLY", "0")))
+    teacher_source, teacher_revision, teacher_local_only = resolve_model_load_spec(
+        teacher_cfg, override_env="LBD_TEACHER_MODEL_SOURCE"
+    )
+    student_source, student_revision, student_local_only = resolve_model_load_spec(
+        student_cfg, override_env="LBD_STUDENT_MODEL_SOURCE"
+    )
     teacher = AutoModelForCausalLM.from_pretrained(
-        teacher_cfg["model_name"],
-        revision=teacher_cfg["revision"],
+        teacher_source,
+        revision=teacher_revision,
         torch_dtype=dtype_by_name[teacher_cfg["torch_dtype"]],
-        local_files_only=local_only,
+        local_files_only=teacher_local_only,
         low_cpu_mem_usage=True,
     ).to("cuda")
     teacher.requires_grad_(False)
@@ -502,10 +509,10 @@ def load_teacher_and_student(
     teacher.config.use_cache = False
 
     student = AutoModelForCausalLM.from_pretrained(
-        student_cfg["model_name"],
-        revision=student_cfg["revision"],
+        student_source,
+        revision=student_revision,
         torch_dtype=dtype_by_name[student_cfg["torch_dtype"]],
-        local_files_only=local_only,
+        local_files_only=student_local_only,
         low_cpu_mem_usage=True,
     ).to("cuda")
     student.config.use_cache = False

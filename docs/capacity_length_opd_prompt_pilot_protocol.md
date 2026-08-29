@@ -165,6 +165,7 @@ Reusable method and analysis logic:
 Phase-first entrypoints:
 
 - `scripts/17_0_prepare_opd_storage.py`
+- `scripts/17_0_submit_opd_prompt_pilot.py`
 - `scripts/17_0_run_opd_prompt_pilot_c49.sh`
 - `scripts/17_1_generate_opd_reference_lengths.py`
 - `scripts/17_2_merge_opd_reference_lengths.py`
@@ -213,13 +214,57 @@ Every stage enters the allocation with `srun --jobid=<active-job-id> --overlap`.
 each GPU launch, the runner prints `nvidia-smi` process evidence and selects GPUs by
 remaining memory across two checks. On C49 this deliberately treats the user's `gg`
 processes as keepalives and subtracts their memory through `memory.free`; it does not use
-their utilization as an exclusion criterion.
+their utilization as an exclusion criterion. The dense-teacher preflight and training
+workers require 22,000 MiB free on C49, which covers their registered batch-1 expected
+peak plus a safety margin. C30--C32 retain the original 30,000/32,000 MiB thresholds;
+those values are not physically attainable on a 32,760 MiB C49 after retaining `gg`.
 
 Reference generation uses three independent GPU shards, the two OPD policies train on
 two separate GPUs, and the three evaluation models run on three separate GPUs. If
 training was preempted after valid node-local resume state was saved, set `RESUME=1` for
 the training stage. Existing completed artifacts are validated and skipped; incomplete or
 hash-mismatched artifacts are never overwritten automatically.
+
+## Shared-node Slurm execution
+
+Queued, unattended execution uses the dependency-ordered `sbatch` DAG. Preview
+the exact jobs before submission:
+
+```bash
+/home/youyang7/miniconda3/bin/python scripts/17_0_submit_opd_prompt_pilot.py \
+  --reference-node c30,c31 --preflight-node c30,c31 \
+  --training-node c30,c31 --evaluation-node c30,c31 --dry-run
+
+/home/youyang7/miniconda3/bin/python scripts/17_0_submit_opd_prompt_pilot.py \
+  --reference-node c30,c31 --preflight-node c30,c31 \
+  --training-node c30,c31 --evaluation-node c30,c31
+```
+
+Use `salloc` only for interactive node access and inspection. After the allocation
+is granted, run checks within it using its job ID:
+
+```bash
+salloc --partition=a6000 --nodelist=c31 --nodes=1 --ntasks=1 \
+  --cpus-per-task=16 --time=01:00:00
+srun --jobid="${SLURM_JOB_ID}" --overlap nvidia-smi
+```
+
+The node arguments may independently select C30, C31, C32, or the shared-partition
+target `c30,c31`, which lets Slurm choose the first schedulable A6000 node. C30--C32 use the
+strict shared-node gate: every selected GPU must have at least the stage-specific
+free-memory threshold, at most 500 MiB used, and at most 10 percent utilization
+across two consecutive observations. Thus a scheduled job may wait without
+launching a model if another user still occupies the physical GPUs. C49 retains
+its separate remaining-memory policy for the user's `gg` keepalive allocation.
+Before model loading, each GPU job copies the registered immutable student and,
+when needed, teacher snapshot from the BeeGFS Hugging Face cache to a validated
+node-local directory under `/var/tmp/${USER}/hf_snapshots`. Runtime-only model
+source overrides point Transformers at those local copies while preserving the
+registered model names, revisions, tokenizer checks, and experiment config. This
+prevents large Safetensors files from being mmap-loaded directly from BeeGFS.
+Stage node selections and job IDs are recorded under the experiment's `slurm/`
+directory without changing the frozen experiment config or training method; the
+dry run prints the exact submission commands for inspection.
 
 The final marker is created only after the audit verifies reference support, preflight
 gate, rollout multiplicity, exact sampled-token signal construction, optimizer counts,

@@ -1,0 +1,90 @@
+{
+  "experiment_name": "capacity_length_ranked_sampling_7b_multiseed_v1",
+  "protocol_variant": "comparative_multiseed_ranked_length_evaluation",
+  "parent_training_specs": [
+    {
+      "label": "sealed_seed17_parent",
+      "config_path": "configs/capacity_length_ranked_sampling_7b_training_seed17_v1.json",
+      "input_manifest_path": "results/capacity_length_ranked_sampling_7b_v1/formal/training/input/dataset_manifest.json",
+      "launch_manifest_path": "results/capacity_length_ranked_sampling_7b_v1/formal/training/training_manifest_shard_00_of_01.json",
+      "audit_path": "results/capacity_length_ranked_sampling_7b_v1/formal/training/audit/training_audit.json",
+      "completion_marker_path": "results/capacity_length_ranked_sampling_7b_v1/formal/training/audit/TRAINING_COMPLETE",
+      "expected_seeds": [
+        17
+      ],
+      "expected_run_count": 3
+    },
+    {
+      "label": "seed42_73_extension",
+      "config_path": "configs/capacity_length_ranked_sampling_7b_training_seed42_73_v1.json",
+      "input_manifest_path": "results/capacity_length_ranked_sampling_7b_multiseed_v1/formal/training/seed42_73/input/dataset_manifest.json",
+      "launch_manifest_path": "results/capacity_length_ranked_sampling_7b_multiseed_v1/formal/training/seed42_73/training_manifest_shard_00_of_01.json",
+      "audit_path": "results/capacity_length_ranked_sampling_7b_multiseed_v1/formal/training/seed42_73/audit/training_audit.json",
+      "completion_marker_path": "results/capacity_length_ranked_sampling_7b_multiseed_v1/formal/training/seed42_73/audit/TRAINING_COMPLETE",
+      "expected_seeds": [
+        42,
+        73
+      ],
+      "expected_run_count": 6
+    }
+  ],
+  "dataset": {
+    "source": "hf_dataset",
+    "dataset_name": "openai/gsm8k",
+    "dataset_config": "main",
+    "question_field": "question",
+    "answer_field": "answer",
+    "answer_format": "gsm8k"
+  },
+  "student": {
+    "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+    "torch_dtype": "bfloat16"
+  },
+  "evaluation": {
+    "dataset_split": "test",
+    "start_index": 50,
+    "limit": 1269,
+    "max_new_tokens": 512,
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "batch_size": 32,
+    "include_base_model": true,
+    "expected_adapter_count": 9,
+    "expected_run_count": 10,
+    "max_parallel": 3
+  },
+  "analysis": {
+    "training_seeds": [
+      17,
+      42,
+      73
+    ],
+    "ranks": [
+      "relative_short",
+      "relative_medium",
+      "relative_long"
+    ],
+    "familywise_alpha": 0.05,
+    "bootstrap_samples": 10000,
+    "primary_pairs": [
+      [
+        "relative_short",
+        "relative_medium"
+      ],
+      [
+        "relative_medium",
+        "relative_long"
+      ],
+      [
+        "relative_short",
+        "relative_long"
+      ]
+    ],
+    "evidence_level": "comparative_multiseed_replication",
+    "scope": "Locked and previously observed GSM8K test[50:1319] only"
+  },
+  "outputs": {
+    "result_root": "results/capacity_length_ranked_sampling_7b_multiseed_v1",
+    "figure_root": "figures/capacity_length_ranked_sampling_7b_multiseed_v1"
+  }
+}

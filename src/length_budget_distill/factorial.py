@@ -143,6 +143,67 @@ def runtime_metadata(packages: Sequence[str] | None = None) -> Dict[str, Any]:
     }
 
 
+def select_launcher_shard_runs(
+    runs: Sequence[Mapping[str, Any]],
+    *,
+    launcher_shards: int,
+    launcher_shard_index: int,
+) -> List[Dict[str, Any]]:
+    """Select a launch shard, honoring explicit balanced assignments when present."""
+
+    if launcher_shards <= 0 or not 0 <= launcher_shard_index < launcher_shards:
+        raise ValueError("Invalid launcher shard topology.")
+    copied = [dict(run) for run in runs]
+    declared_assignment = ["launcher_shard_index" in run for run in copied]
+    if any(declared_assignment) and not all(declared_assignment):
+        raise ValueError("Dataset manifest mixes declared and implicit launcher assignments.")
+    if not all(declared_assignment):
+        return [
+            run
+            for index, run in enumerate(copied)
+            if index % launcher_shards == launcher_shard_index
+        ]
+    for run in copied:
+        if int(run.get("launcher_shards", -1)) != launcher_shards:
+            raise ValueError(
+                f"Declared launcher topology mismatch for {run.get('run_name')}: "
+                f"manifest={run.get('launcher_shards')} requested={launcher_shards}"
+            )
+        declared_index = int(run["launcher_shard_index"])
+        if not 0 <= declared_index < launcher_shards:
+            raise ValueError(
+                f"Invalid declared launcher shard for {run.get('run_name')}: {declared_index}"
+            )
+    return [
+        run
+        for run in copied
+        if int(run["launcher_shard_index"]) == launcher_shard_index
+    ]
+
+
+def declared_launcher_wave_groups(
+    runs: Sequence[Mapping[str, Any]],
+) -> List[List[Dict[str, Any]]]:
+    """Return contiguous declared launch waves, or an empty list for legacy runs."""
+
+    copied = [dict(run) for run in runs]
+    declared = ["launcher_wave_index" in run for run in copied]
+    if any(declared) and not all(declared):
+        raise ValueError("Training runs mix declared and implicit launcher waves.")
+    if not all(declared):
+        return []
+    wave_indices = [int(run["launcher_wave_index"]) for run in copied]
+    unique = sorted(set(wave_indices))
+    if unique != list(range(len(unique))):
+        raise ValueError(f"Declared launcher waves must be contiguous from zero: {unique}")
+    if wave_indices != sorted(wave_indices):
+        raise ValueError("Declared launcher runs are not ordered by wave.")
+    return [
+        [dict(run) for run in copied if int(run["launcher_wave_index"]) == wave_index]
+        for wave_index in unique
+    ]
+
+
 def stable_generation_seed(
     base_seed: int,
     generator_name: str,

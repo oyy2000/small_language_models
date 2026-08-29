@@ -1,0 +1,48 @@
+{
+  "continuation_name": "capacity_length_opd_prompt_gate_waived_continuation_v1",
+  "status": "authorized",
+  "decision": "continue_after_failed_preflight",
+  "evidence_level": "exploratory_gate_waived_single_seed_continuation",
+  "formal_claim_allowed": false,
+  "authorization": {
+    "date": "2026-08-28",
+    "source": "user_instruction",
+    "instruction": "Write the current report under docs/OPD and continue the experiment."
+  },
+  "base_protocol": {
+    "config_path": "configs/capacity_length_opd_prompt_pilot_v1.json",
+    "config_file_sha256": "54de28f8c23ea51cc531e37109a51d48418c13885fab82f95e69d28d51dad019",
+    "protocol_hash": "d6117bcb15823274f5928a537d5073d8becd1edb1117edc3f6e8b01e73544ccc"
+  },
+  "reference_evidence": {
+    "manifest_path": "results/capacity_length_opd_prompt_pilot_v1/pilot/references/reference_manifest.json",
+    "manifest_sha256": "9b7bf39fd58fe5890978f2e24eae72bf7cb9618e79aed276f4753c8547eaf606",
+    "record_count": 3500
+  },
+  "failed_preflight": {
+    "manifest_path": "results/capacity_length_opd_prompt_pilot_v1/pilot/preflight/preflight_manifest.json",
+    "manifest_sha256": "e2eec92bae0e013b045068b7b0cfcacc5e9bce4d7f4a21881c20645799e4aadc",
+    "summary_path": "results/capacity_length_opd_prompt_pilot_v1/pilot/preflight/preflight_summary.json",
+    "summary_sha256": "9051f4a490c2e9e8af1b081ea28fdb8e0b191c575d26efc7cac5dfd3d398b178",
+    "status": "failed",
+    "prompt_count": 100,
+    "rollout_count": 800,
+    "observed_concise_in_band_rate": 0.12,
+    "required_concise_in_band_rate": 0.7,
+    "finite_teacher_signal": true
+  },
+  "stages": {
+    "smoke": "gate_waived_smoke",
+    "training": "gate_waived_continuation"
+  },
+  "outputs": {
+    "result_root": "results/capacity_length_opd_prompt_gate_waived_continuation_v1",
+    "checkpoint_root": "checkpoints/capacity_length_opd_prompt_gate_waived_continuation_v1",
+    "figure_root": "figures/capacity_length_opd_prompt_gate_waived_continuation_v1"
+  },
+  "required_labels": {
+    "preflight_gate_waived": true,
+    "original_preflight_passed": false,
+    "original_pilot_complete": false
+  }
+}

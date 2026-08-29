@@ -1,6 +1,6 @@
 # Short–medium–long 大规模实验设计
 
-更新日期：2026-08-26
+更新日期：2026-08-28
 
 ## 1. 研究目标
 
@@ -19,12 +19,12 @@
 - sampling：每题 16 个候选，temperature 0.7，top-p 0.95，最大 512 new tokens；
 - selection：正确候选精确去重后取 shortest、lower-median、longest；
 - support：881 道固定 common-support GSM8K 训练题；
-- training：equal-example，completion-only SFT，seed 17；
+- training：equal-example，completion-only SFT，training seed 17、42、73；
 - evaluation：已锁定且已观察的 GSM8K `test[50:1319]`，1269 题，greedy，最大 512 new tokens。
 
 生成审计记录了 14,096 个预期和实际候选，其中 13,962 个通过最终答案 verifier；881 道题全部满足至少 3 个唯一正确候选，三个 rank 使用相同问题支持集。训练监督 token 总量分别为 171,252、213,621 和 280,168，因此 equal-example 不等于 equal-supervision-token。
 
-正式结果与限制见 [当前报告](../../results/capacity_length_ranked_sampling_7b_v1/formal/analysis/experiment_report.md)。完成审计为 passed，但证据只有一个训练 seed，且 short 对 long 的 Holm-adjusted McNemar `p=0.1747`。
+Phase A 的正式结果与限制见 [三-seed报告](../../results/capacity_length_ranked_sampling_7b_multiseed_v1/formal/analysis/experiment_report.md)。完成审计为 passed：9 个 adapter、10 个评测模型和 12,690 条 prediction 均完整。short 对 long 的三-seed平均差为 `+2.73 pp`，crossed seed/problem bootstrap 95% CI `[+0.60,+4.89] pp`，三项比较 Holm 校正后 `p=0.0462`。该 cohort 已被观察，因此证据级别仍是比较性复现，不是新的 untouched confirmation。
 
 ## 3. 预注册假设
 
@@ -107,6 +107,8 @@ completion_tokens ~= candidate_count * mean_completion_tokens
 
 ### Phase A：多 seed 复现当前结果
 
+状态：已于 2026-08-28 完成训练、锁定评测、统计、图表与 completion audit。
+
 固定当前所有配置，只增加 training seeds 42 和 73。
 
 | 项目 | 数量 |
@@ -136,6 +138,8 @@ completion_tokens ~= candidate_count * mean_completion_tokens
 在 development 规则下锁定 `K` 与 primary rank definition。只有数据分离度、支持率和质量审计都通过才训练这一阶段的 adapter。这样可以避免先跑 36 个 adapter，再发现 minimum 只是偶然的极短异常值。
 
 ### Phase C：teacher capacity x rank 主因子
+
+状态：用户批准固定当前 `K=16` 直接执行该阶段；协议已于 2026-08-28 冻结并提交 generation DAG。[提交清单](../../results/capacity_length_ranked_sampling_multiteacher_v1/formal/protocol/submission_manifest.json)记录了当前九作业 DAG、两个被替换 generation 作业、修复后的依赖关系和清单记录时的工作树源码哈希；[清单注记](../../results/capacity_length_ranked_sampling_multiteacher_v1/formal/protocol/submission_manifest_annotation.json)明确这些哈希不是 Slurm spool 快照，并记录正式结果根迁移到 BeeGFS 的校验过程。训练前发现朴素 product order 加 `index % 3` 会把 seed 与节点混杂；[平衡 launcher plan](../../results/capacity_length_ranked_sampling_multiteacher_v1/formal/protocol/launcher_assignment_plan.json)在不改变 36 个注册 cell 或训练超参数的前提下，让每个 C30/C31/C32 shard 各包含 12 个 run，并平衡 teacher、rank、seed 边际。每个节点的三-run wave 包含三个不同 teacher 和三个 rank，跨节点同一 wave 对三个 seed 和三个 rank 各有三个 run，从而同时降低节点与运行时段混杂。该清单的证据类别是 `submission_provenance_not_completion_evidence`。当前尚无 Phase C 性能结果，不能把排队任务当作主矩阵证据。Phase B 保留为后续 sampling-density robustness。
 
 固定 1.5B student：
 
@@ -189,12 +193,12 @@ equal-token 的含义必须保持为原始 completion supervision token 总量�
 
 ### 6.1 当前数据的功效提示
 
-当前 short 对 long 在 1269 题中有 124 个 `short-only correct` 和 95 个 `long-only correct`，观察差异为 2.285 pp。用这组 discordance 做 McNemar 正态近似规划，在效应不缩水的乐观前提下：
+原始 seed-17 short 对 long 在 1269 题中有 124 个 `short-only correct` 和 95 个 `long-only correct`，观察差异为 2.285 pp。用这组 discordance 做 McNemar 正态近似规划，在效应不缩水的乐观前提下：
 
 - 双侧 `alpha=0.05`、80% power 约需 2,592 道独立配对题；
 - 把三项 primary contrasts 的最保守阈值近似为 `alpha=0.05/3` 时约需 3,457 道独立配对题。
 
-这是基于已观察效应的近似规划，不是保证。效应通常会回归均值，正式设计应做 sensitivity curve，例如 1、2、3 pp 三档。
+这是基于原始单-seed已观察效应的历史近似规划，不是保证。新的三-seed平均 short–long 差为 2.73 pp，但没有增加独立问题数，因此不能把 3,807 条 seed-question prediction 当作 3,807 道独立题重新计算 power。正式设计仍应做 1、2、3 pp 的 sensitivity curve。
 
 GSM8K official test 的 1,319 题已全部被项目观察，[paired-rewrite confirmatory manifest](../../results/capacity_length_paired_rewrite_7b_pilot_v1/pilot/eval/confirmatory/eval_manifest_confirmatory_shard_00_of_01.json) 也表明内部 `train[3000:7473]` 已被评测。它们可以继续作为锁定的比较/复现 cohort，但不能再称为 untouched confirmatory set。多个 training seed 能估计训练随机性，却不会把 1,269 道题变成 `1,269 x seeds` 个独立测试样本。
 

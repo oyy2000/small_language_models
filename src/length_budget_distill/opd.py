@@ -34,6 +34,9 @@ from .verifiers import extract_final_answer, verify_answer
 OPD_ARMS = ("standard_prompt", "bounded_concise_prompt")
 OBJECTIVE_NAME = "sampled_token_reverse_kl_ppo_clipped"
 TEACHER_CONTEXT_MODE = "common_standard_prompt"
+GATE_WAIVED_SMOKE_STAGE = "gate_waived_smoke"
+GATE_WAIVED_TRAINING_STAGE = "gate_waived_continuation"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def protocol_hash(protocol: Mapping[str, Any]) -> str:
@@ -209,6 +212,152 @@ def validate_opd_protocol(protocol: Mapping[str, Any]) -> None:
         )
         if actual != expected:
             raise ValueError(f"splits.{name} must equal {expected}; observed={actual}.")
+
+
+def validate_gate_waiver(
+    protocol: Mapping[str, Any],
+    waiver: Mapping[str, Any],
+    *,
+    waiver_path: str | Path,
+    base_config_path: str | Path,
+) -> Dict[str, Any]:
+    """Validate a hash-bound continuation after a failed preflight.
+
+    The waiver does not turn the failed preflight into a passed one. It only
+    returns provenance for separately rooted exploratory artifacts.
+    """
+
+    validate_opd_protocol(protocol)
+    resolved_waiver = Path(waiver_path).resolve()
+    resolved_base_config = Path(base_config_path).resolve()
+    if not resolved_waiver.is_file() or not resolved_base_config.is_file():
+        raise FileNotFoundError("Gate-waiver and base-config files must exist.")
+    if read_json(resolved_waiver) != dict(waiver):
+        raise ValueError("Gate-waiver contents do not match the hash-bound config file.")
+    if waiver.get("status") != "authorized" or waiver.get("decision") != (
+        "continue_after_failed_preflight"
+    ):
+        raise ValueError("The OPD continuation requires an explicit failed-gate authorization.")
+    if waiver.get("evidence_level") != "exploratory_gate_waived_single_seed_continuation":
+        raise ValueError("The gate-waived continuation must remain exploratory.")
+    if waiver.get("formal_claim_allowed") is not False:
+        raise ValueError("A gate-waived continuation cannot authorize a formal claim.")
+    authorization = waiver.get("authorization", {})
+    if (
+        authorization.get("source") != "user_instruction"
+        or not str(authorization.get("instruction", "")).strip()
+    ):
+        raise ValueError("The gate waiver must record the user instruction.")
+
+    base = waiver.get("base_protocol", {})
+    if base.get("protocol_hash") != protocol_hash(protocol):
+        raise ValueError("Gate-waiver base protocol hash mismatch.")
+    if base.get("config_file_sha256") != file_sha256(resolved_base_config):
+        raise ValueError("Gate-waiver base config hash mismatch.")
+    recorded_base_path = _resolve_gate_waiver_path(base.get("config_path"))
+    if recorded_base_path != resolved_base_config:
+        raise ValueError("Gate-waiver base config path mismatch.")
+
+    reference = waiver.get("reference_evidence", {})
+    reference_manifest_path = _resolve_gate_waiver_path(reference.get("manifest_path"))
+    if (
+        not reference_manifest_path.is_file()
+        or file_sha256(reference_manifest_path) != reference.get("manifest_sha256")
+    ):
+        raise ValueError("Gate-waiver reference manifest hash mismatch.")
+    reference_manifest = read_json(reference_manifest_path)
+    reference_checks = {
+        "status": "complete",
+        "protocol_hash": protocol_hash(protocol),
+        "record_count": int(reference.get("record_count", -1)),
+    }
+    if any(reference_manifest.get(key) != value for key, value in reference_checks.items()):
+        raise ValueError("Gate-waiver reference evidence is invalid.")
+    if int(reference.get("record_count", -1)) != int(protocol["splits"]["training"]["limit"]):
+        raise ValueError("Gate-waiver reference count does not cover the training split.")
+
+    failed = waiver.get("failed_preflight", {})
+    preflight_manifest_path = _resolve_gate_waiver_path(failed.get("manifest_path"))
+    preflight_summary_path = _resolve_gate_waiver_path(failed.get("summary_path"))
+    expected_hashes = (
+        (preflight_manifest_path, failed.get("manifest_sha256")),
+        (preflight_summary_path, failed.get("summary_sha256")),
+    )
+    if any(not path.is_file() or file_sha256(path) != expected for path, expected in expected_hashes):
+        raise ValueError("Gate-waiver failed-preflight artifact hash mismatch.")
+    preflight_manifest = read_json(preflight_manifest_path)
+    preflight_summary = read_json(preflight_summary_path)
+    observed_rate = float(preflight_summary.get("concise_in_band_rate", -1.0))
+    required_rate = float(protocol["preflight"]["minimum_concise_in_band_rate"])
+    if (
+        preflight_manifest.get("status") != "failed"
+        or preflight_summary.get("status") != "failed"
+        or preflight_manifest.get("protocol_hash") != protocol_hash(protocol)
+        or preflight_summary.get("protocol_hash") != protocol_hash(protocol)
+        or preflight_summary.get("finite_teacher_signal") is not True
+        or int(preflight_manifest.get("prompt_count", -1))
+        != int(protocol["preflight"]["prompt_count"])
+        or int(preflight_manifest.get("rollout_count", -1))
+        != int(failed.get("rollout_count", -1))
+        or observed_rate >= required_rate
+    ):
+        raise ValueError("The waiver does not point to a complete failed OPD preflight.")
+    if (
+        float(failed.get("observed_concise_in_band_rate", -1.0)) != observed_rate
+        or float(failed.get("required_concise_in_band_rate", -1.0)) != required_rate
+        or failed.get("finite_teacher_signal") is not True
+        or int(failed.get("prompt_count", -1)) != int(preflight_manifest["prompt_count"])
+    ):
+        raise ValueError("Gate-waiver recorded preflight diagnostics mismatch.")
+
+    stages = waiver.get("stages", {})
+    if stages != {
+        "smoke": GATE_WAIVED_SMOKE_STAGE,
+        "training": GATE_WAIVED_TRAINING_STAGE,
+    }:
+        raise ValueError("Gate-waived stage labels changed.")
+    outputs = waiver.get("outputs", {})
+    for name in ("result_root", "checkpoint_root", "figure_root"):
+        resolved = _resolve_gate_waiver_path(outputs.get(name))
+        original = _resolve_gate_waiver_path(protocol["outputs"][name])
+        if resolved == original:
+            raise ValueError(f"Gate-waived {name} must be separate from the original pilot.")
+        configured = Path(str(outputs.get(name)))
+        stable_path = configured if configured.is_absolute() else PROJECT_ROOT / configured
+        stable_path = stable_path.absolute()
+        if PROJECT_ROOT != stable_path and PROJECT_ROOT not in stable_path.parents:
+            raise ValueError(f"Gate-waived {name} must remain inside the project workspace.")
+    labels = waiver.get("required_labels", {})
+    if labels != {
+        "preflight_gate_waived": True,
+        "original_preflight_passed": False,
+        "original_pilot_complete": False,
+    }:
+        raise ValueError("Gate-waived evidence labels changed.")
+    return {
+        **labels,
+        "formal_claim_allowed": False,
+        "evidence_level": str(waiver["evidence_level"]),
+        "gate_waiver_config_path": str(resolved_waiver),
+        "gate_waiver_config_sha256": file_sha256(resolved_waiver),
+        "reference_manifest_path": str(reference_manifest_path),
+        "reference_manifest_sha256": file_sha256(reference_manifest_path),
+        "failed_preflight_manifest_path": str(preflight_manifest_path),
+        "failed_preflight_manifest_sha256": file_sha256(preflight_manifest_path),
+        "failed_preflight_summary_path": str(preflight_summary_path),
+        "failed_preflight_summary_sha256": file_sha256(preflight_summary_path),
+        "observed_concise_in_band_rate": observed_rate,
+        "required_concise_in_band_rate": required_rate,
+    }
+
+
+def _resolve_gate_waiver_path(value: Any) -> Path:
+    if not isinstance(value, (str, Path)) or not str(value).strip():
+        raise ValueError("Gate-waiver artifact paths must be non-empty.")
+    path = Path(value)
+    # Preserve the project's stable /home paths even when a top-level artifact
+    # directory is a symlink to BeeGFS. File hashes validate the physical target.
+    return (path if path.is_absolute() else PROJECT_ROOT / path).absolute()
 
 
 def reference_length_bounds(
@@ -1174,6 +1323,7 @@ def publish_opd_adapter(
     reference_manifest_path: str | Path,
     source_paths: Sequence[str | Path],
     stage: str = "pilot",
+    additional_evidence: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Publish one OPD LoRA adapter with hash-bound pure-loss evidence."""
 
@@ -1195,6 +1345,18 @@ def publish_opd_adapter(
         "value_head_used": False,
         "source_sha256": {str(path): file_sha256(path) for path in source_paths},
     }
+    if additional_evidence:
+        overlap = set(evidence).intersection(additional_evidence)
+        conflicts = {
+            key for key in overlap if evidence[key] != additional_evidence[key]
+        }
+        if conflicts:
+            raise ValueError(
+                f"Additional adapter evidence conflicts with reserved keys: {sorted(conflicts)}"
+            )
+        evidence.update(
+            {key: value for key, value in additional_evidence.items() if key not in overlap}
+        )
     return publish_adapter(runtime_dir, publish_dir, evidence=evidence)
 
 
@@ -1204,6 +1366,7 @@ def validated_opd_adapter(
     arm: str,
     adapter_dir: str | Path,
     stage: str = "pilot",
+    required_evidence: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any] | None:
     marker = validated_training_marker(adapter_dir)
     if marker is None:
@@ -1221,6 +1384,10 @@ def validated_opd_adapter(
         "value_head_used": False,
     }
     if any(marker.get(key) != value for key, value in checks.items()):
+        return None
+    if required_evidence and any(
+        marker.get(key) != value for key, value in required_evidence.items()
+    ):
         return None
     rollout_manifest = Path(str(marker.get("rollout_manifest_path", "")))
     if not rollout_manifest.is_file() or file_sha256(rollout_manifest) != marker.get(

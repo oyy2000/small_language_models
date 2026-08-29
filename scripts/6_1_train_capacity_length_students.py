@@ -23,8 +23,10 @@ if str(SRC_ROOT) not in sys.path:
 from length_budget_distill.config import load_config
 from length_budget_distill.factorial import (
     canonical_sha256,
+    declared_launcher_wave_groups,
     file_sha256,
     runtime_metadata,
+    select_launcher_shard_runs,
     validated_adapter_evidence,
 )
 
@@ -85,13 +87,17 @@ def main() -> None:
         raise ValueError(f"--modes must be a non-empty subset of {sorted(valid_modes)}")
 
     all_runs = [run for run in dataset_manifest.get("runs", []) if run.get("mode") in requested_modes]
-    indexed_runs = [
-        run
-        for index, run in enumerate(all_runs)
-        if index % args.launcher_shards == args.launcher_shard_index
-    ]
+    indexed_runs = select_launcher_shard_runs(
+        all_runs,
+        launcher_shards=args.launcher_shards,
+        launcher_shard_index=args.launcher_shard_index,
+    )
     if not indexed_runs:
         raise ValueError("No training runs were assigned to this launcher shard.")
+    declared_waves = declared_launcher_wave_groups(indexed_runs)
+    wave_barrier_policy = (
+        "declared_launcher_wave_barrier_v1" if declared_waves else "legacy_continuous_queue"
+    )
 
     work_dir = Path(args.work_dir)
     config_dir = work_dir / "configs"
@@ -154,6 +160,8 @@ def main() -> None:
         "training_overlay_sha256": training_overlay_sha256,
         "launcher_shard_index": args.launcher_shard_index,
         "launcher_shards": args.launcher_shards,
+        "wave_barrier_policy": wave_barrier_policy,
+        "launcher_wave_count": len(declared_waves),
         "run_count": len(entries),
         "runtime": runtime_metadata(),
         "runs": entries,
@@ -173,7 +181,14 @@ def main() -> None:
     max_parallel = args.max_parallel or (len(gpu_ids) if gpu_ids else 1)
     if max_parallel <= 0:
         raise ValueError("--max-parallel must be positive.")
-    failures = _run_commands(entries, commands, gpu_ids, max_parallel, args.skip_complete)
+    failures = _run_commands(
+        entries,
+        commands,
+        gpu_ids,
+        max_parallel,
+        args.skip_complete,
+        wave_barrier=bool(declared_waves),
+    )
     manifest["status"] = "failed" if failures else "complete"
     manifest["runs"] = entries
     _write_json(manifest_path, manifest)
@@ -215,13 +230,26 @@ def _run_commands(
     gpu_ids: List[str],
     max_parallel: int,
     skip_complete: bool,
+    *,
+    wave_barrier: bool = False,
 ) -> List[Dict[str, Any]]:
     pending = list(zip(entries, commands))
     running: List[Tuple[subprocess.Popen[Any], Dict[str, Any], Any]] = []
     failures: List[Dict[str, Any]] = []
     available_gpus = list(gpu_ids)
     while pending or running:
+        active_wave = None
+        if wave_barrier:
+            if running:
+                running_waves = {int(entry["launcher_wave_index"]) for _, entry, _ in running}
+                if len(running_waves) != 1:
+                    raise ValueError(f"Multiple launcher waves are running concurrently: {running_waves}")
+                active_wave = next(iter(running_waves))
+            elif pending:
+                active_wave = int(pending[0][0]["launcher_wave_index"])
         while pending and len(running) < max_parallel and (not gpu_ids or available_gpus):
+            if wave_barrier and int(pending[0][0]["launcher_wave_index"]) != active_wave:
+                break
             entry, command = pending.pop(0)
             output_dir = Path(entry["output_dir"])
             evidence = validated_adapter_evidence(output_dir)
