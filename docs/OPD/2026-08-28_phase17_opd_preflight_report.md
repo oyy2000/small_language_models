@@ -171,10 +171,13 @@ The recovered smoke completed at 23:29 EDT. Its validated diagnostics were:
 | In-band rate | 12.50% | 10.94% |
 
 This smoke validates the training, resume, publication, and provenance path; it does not
-reverse the failed preflight or constitute a performance result. The full continuation
-supervisor is active and is waiting for two C49 GPUs to again satisfy the 22,000 MiB
-free-memory gate. The principal live log is
-`results/capacity_length_opd_prompt_gate_waived_continuation_v1/slurm/c49_continuation_supervisor_attempt_0003.log`.
+reverse the failed preflight or constitute a performance result. At 00:44 EDT on
+2026-08-29, the user explicitly requested immediate execution without further waiting.
+The waiting OPD step `277424.44` was cancelled without changing allocation `277424`, its
+`gg` keepalive, or the concurrent ranked-evaluation step. The full continuation was then
+launched on GPU1 and GPU2 with a user-authorized 21,000 MiB one-check admission override.
+Its launcher log is
+`results/capacity_length_opd_prompt_gate_waived_continuation_v1/slurm/c49_full_training_21000mib.log`.
 Because allocation `277424` ends at 22:06 EDT on 2026-08-29, Slurm job `277628` is queued
 with `afterany:277424` on C49 for a hash-preserving resume. It will skip the already
 validated smoke and either resume symmetric per-batch full-training checkpoints or exit

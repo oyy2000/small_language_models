@@ -1,6 +1,6 @@
 # Short–medium–long 大规模实验设计
 
-更新日期：2026-08-28
+更新日期：2026-08-29
 
 ## 1. 研究目标
 
@@ -139,7 +139,9 @@ completion_tokens ~= candidate_count * mean_completion_tokens
 
 ### Phase C：teacher capacity x rank 主因子
 
-状态：用户批准固定当前 `K=16` 直接执行该阶段；协议已于 2026-08-28 冻结并提交 generation DAG。[提交清单](../../results/capacity_length_ranked_sampling_multiteacher_v1/formal/protocol/submission_manifest.json)记录了当前九作业 DAG、两个被替换 generation 作业、修复后的依赖关系和清单记录时的工作树源码哈希；[清单注记](../../results/capacity_length_ranked_sampling_multiteacher_v1/formal/protocol/submission_manifest_annotation.json)明确这些哈希不是 Slurm spool 快照，并记录正式结果根迁移到 BeeGFS 的校验过程。训练前发现朴素 product order 加 `index % 3` 会把 seed 与节点混杂；[平衡 launcher plan](../../results/capacity_length_ranked_sampling_multiteacher_v1/formal/protocol/launcher_assignment_plan.json)在不改变 36 个注册 cell 或训练超参数的前提下，让每个 C30/C31/C32 shard 各包含 12 个 run，并平衡 teacher、rank、seed 边际。每个节点的三-run wave 包含三个不同 teacher 和三个 rank，跨节点同一 wave 对三个 seed 和三个 rank 各有三个 run，从而同时降低节点与运行时段混杂。该清单的证据类别是 `submission_provenance_not_completion_evidence`。当前尚无 Phase C 性能结果，不能把排队任务当作主矩阵证据。Phase B 保留为后续 sampling-density robustness。
+状态：已于 2026-08-29 完成全部 36 个 adapter、37 个模型条件的锁定评测、统计、图表和最终 completion audit。详见[主矩阵结果报告](main_matrix_results.md)、[自动生成的正式报告](../../results/capacity_length_ranked_sampling_multiteacher_v1/formal/analysis/experiment_report.md)和[完成审计](../../results/capacity_length_ranked_sampling_multiteacher_v1/formal/completion_audit.json)。
+
+协议固定当前 `K=16`。[提交清单](../../results/capacity_length_ranked_sampling_multiteacher_v1/formal/protocol/submission_manifest.json)记录原九作业 DAG、替换记录和清单记录时的工作树源码哈希；[清单注记](../../results/capacity_length_ranked_sampling_multiteacher_v1/formal/protocol/submission_manifest_annotation.json)明确这些哈希不是 Slurm spool 快照，并记录正式结果根迁移到 BeeGFS 的校验过程。训练前发现朴素 product order 加 `index % 3` 会把 seed 与节点混杂；[平衡 launcher plan](../../results/capacity_length_ranked_sampling_multiteacher_v1/formal/protocol/launcher_assignment_plan.json)在不改变 36 个注册 cell 或训练超参数的前提下，让三个 launcher shard 各包含 12 个 run，并平衡 teacher、rank、seed 边际。每个 shard 的三-run wave 包含三个不同 teacher 和三个 rank，跨 shard 同一 wave 对三个 seed 和三个 rank 各有三个 run，从而降低执行位置与运行时段混杂。实际恢复执行使用 C49、C31 和 C32；运行替换记录与正式结果证据的边界见主矩阵结果报告。Phase B 仍保留为后续 sampling-density robustness。
 
 固定 1.5B student：
 
@@ -151,11 +153,11 @@ training_seed = {17, 42, 73}
 
 共 `4 x 3 x 3 = 36` 个 adapter。1.5B teacher 条件必须称为 self-distillation control。所有 teacher 保持相同的 answer-blind prompt、sampling hyperparameters、`K` 和最大生成长度。
 
-这一阶段回答 paper 的主问题：更强 teacher 是否产生对小 student 更有用的短轨迹，以及长轨迹的容量失配是否随 teacher/student gap 增大。
+四个 teacher 下的平均准确率均为 short 最高、long 最低，输出长度均从 short 到 long 单调增加。short-long accuracy effect 在 1.5B control、3B、7B、14B 下依次为 `+4.18/+4.96/+3.10/+1.55 pp`；前两项通过覆盖 12 个 teacher 内 contrasts 的 Holm 校正，后两项没有通过。六项 teacher-by-rank interaction 均未通过 Holm 校正。因此这一阶段支持“relative length rank 可传递到 student 输出行为，并在部分 teacher 内伴随 short-ranked accuracy 优势”，但没有证明 teacher capacity 会调节该效应。
 
 ### Phase D：student capacity moderator
 
-Phase C 显示稳定 teacher-by-rank 交互后，再扩 student：
+只有独立复现显示稳定 teacher-by-rank 交互后，才扩 student。当前 Phase C 的六项 interaction 均未通过 family-wise correction，因此尚未达到这一 gate：
 
 ```text
 teacher = {7B, 14B}
@@ -166,7 +168,7 @@ training_seed = {17, 42, 73}
 
 完整矩阵为 54 个 adapter，其中 18 个 1.5B-student cells 可从 Phase C 复用，因此新增 36 个。这个阶段必须使用独立 config/result/checkpoint roots，因为现有 factorial protocol 固定 1.5B student。
 
-如果资源有限，优先选择 Phase C 中 rank 差异最大的一个 teacher 和最小差异的一个 teacher，而不是依据哪个条件准确率最高来挑选。
+如果后续预注册 interaction 复现，不能仅按本次 formal test 中 raw interaction 或准确率选择 teacher。可依据与 formal outcomes 隔离的 development 规则，或在新协议中预先固定 3B 和 14B 这类容量跨度端点，并把选择依据完整记录。
 
 ### Phase E：公平性与机制 ablation
 
@@ -198,7 +200,7 @@ equal-token 的含义必须保持为原始 completion supervision token 总量�
 - 双侧 `alpha=0.05`、80% power 约需 2,592 道独立配对题；
 - 把三项 primary contrasts 的最保守阈值近似为 `alpha=0.05/3` 时约需 3,457 道独立配对题。
 
-这是基于原始单-seed已观察效应的历史近似规划，不是保证。新的三-seed平均 short–long 差为 2.73 pp，但没有增加独立问题数，因此不能把 3,807 条 seed-question prediction 当作 3,807 道独立题重新计算 power。正式设计仍应做 1、2、3 pp 的 sensitivity curve。
+这是基于原始单-seed已观察效应的历史近似规划，不是保证。Phase A 的三-seed平均 short-long 差为 2.73 pp，Phase C 当前 7B cell 的三-seed平均差为 3.10 pp；二者都没有增加独立问题数，因此不能把 seed-question predictions 当作新增独立题重新计算 power。正式设计仍应做 1、2、3 pp 的 sensitivity curve。
 
 GSM8K official test 的 1,319 题已全部被项目观察，[paired-rewrite confirmatory manifest](../../results/capacity_length_paired_rewrite_7b_pilot_v1/pilot/eval/confirmatory/eval_manifest_confirmatory_shard_00_of_01.json) 也表明内部 `train[3000:7473]` 已被评测。它们可以继续作为锁定的比较/复现 cohort，但不能再称为 untouched confirmatory set。多个 training seed 能估计训练随机性，却不会把 1,269 道题变成 `1,269 x seeds` 个独立测试样本。
 
@@ -272,7 +274,7 @@ queued job、部分 shard、只有 adapter 目录或只有汇总 JSON 都不构�
 
 1. 当前 7B -> 1.5B 条件补齐 3 seeds；
 2. 一个冻结 `K_max=32` 候选池上的 sampling-density 数据审计；
-3. 4 teachers x 3 ranks x 3 seeds 的固定 1.5B-student 主矩阵；
+3. 已完成的 4 teachers x 3 ranks x 3 seeds 固定 1.5B-student 主矩阵；
 4. random-correct 和 equal-token 两个关键控制；
 5. 与 paired rewrite 的机制对照；
 6. GSM8K 范围内完整审计与论文图。

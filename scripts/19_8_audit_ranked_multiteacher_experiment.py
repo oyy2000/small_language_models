@@ -248,7 +248,12 @@ def _beegfs_storage_evidence(
     label: str, stable_path: Path, errors: List[str]
 ) -> Dict[str, Any]:
     resolved = stable_path.resolve()
-    _expect(stable_path.is_symlink(), f"{label.capitalize()} root is not a stable symlink.", errors)
+    symlink_anchor = _nearest_symlink_anchor(stable_path)
+    _expect(
+        symlink_anchor is not None,
+        f"{label.capitalize()} root does not use a symlinked stable project path.",
+        errors,
+    )
     _expect(resolved.is_dir(), f"{label.capitalize()} BeeGFS target is missing.", errors)
     _expect(
         str(resolved).startswith("/mnt/beegfs/"),
@@ -259,8 +264,23 @@ def _beegfs_storage_evidence(
         "stable_path": str(stable_path),
         "resolved_path": str(resolved),
         "is_symlink": stable_path.is_symlink(),
+        "symlink_anchor": str(symlink_anchor) if symlink_anchor is not None else None,
+        "uses_symlinked_stable_path": symlink_anchor is not None,
         "is_beegfs": str(resolved).startswith("/mnt/beegfs/"),
     }
+
+
+def _nearest_symlink_anchor(path: Path) -> Path | None:
+    """Return the closest symlink that makes ``path`` a stable project path."""
+
+    current = path
+    while current != PROJECT_ROOT.parent:
+        if current.is_symlink():
+            return current
+        if current == PROJECT_ROOT or current.parent == current:
+            break
+        current = current.parent
+    return None
 
 
 def _audit_submission_provenance(

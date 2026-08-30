@@ -28,6 +28,7 @@ CONFIG="${CONFIG:?CONFIG is required}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-results/capacity_length_ranked_sampling_multiteacher_v1}"
 TASK_START_INDEX="${TASK_START_INDEX:-29}"
 TASK_END_INDEX="${TASK_END_INDEX:-37}"
+HELPER_MANIFEST="${HELPER_MANIFEST:-${OUTPUT_ROOT}/formal/eval/helpers/c32_tail_manifest.json}"
 MIN_FREE_MIB="${MIN_FREE_MIB:-16000}"
 MIN_GPUS="${MIN_GPUS:-2}"
 WAIT_SECONDS="${WAIT_SECONDS:-30}"
@@ -52,4 +53,4 @@ python3 -u scripts/19_6_eval_ranked_multiteacher_helpers.py \
   --task-end-index "${TASK_END_INDEX}" \
   --gpu-ids "${GPU_ID_CSV}" \
   --max-parallel "${MIN_GPUS}" \
-  --helper-manifest "${OUTPUT_ROOT}/formal/eval/helpers/c32_tail_manifest.json"
+  --helper-manifest "${HELPER_MANIFEST}"
